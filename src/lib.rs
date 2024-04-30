@@ -1,54 +1,61 @@
-// TODO ability to scrape spotify page for track title and artist name, and then find corresponding
-// youtube urls for them
-
 use std::error::Error;
-use std::fs::{self, File};
-use std::io::{self, ErrorKind, Write};
+use std::fs;
+use std::io;
 use std::process;
 // use std::process::Command;
 use url::Url;
 
 pub struct Config {
-    pub mode: Option<&'static str>,
+    pub mode: String,
+    pub config_file: Option<String>,
     pub input_file: Option<String>,
     pub remove_input_file: bool,
     pub terms: Option<Vec<String>>,
     pub output_file: Option<String>,
-    pub extract_audio: bool,
     pub verbose: bool,
     pub interactive: bool,
 }
 
 impl Config {
-    pub fn build(mut args: impl Iterator<Item = String>) -> Result<Config, &'static str> {
-        args.next(); // Consume program name
-
-        // Setup defaults
-        let mut config = Config {
-            mode: None,
-            input_file: None,
-            remove_input_file: false,
-            terms: None,
-            output_file: None,
-            extract_audio: false,
-            verbose: false,
-            interactive: true,
-        };
-
-        // Parse mode
-        if let Some(mode) = args.next() {
-            match mode.as_str() {
+    fn parse_mode(mode: Option<String>) -> Result<String, String> {
+        if let Some(mode) = mode {
+            return match mode.as_str() {
                 "help" | "h" | "-h" | "--help" => {
                     Config::help();
                     process::exit(0);
                 }
-                "hook" => config.mode = Some("hook"),
-                "suck" => config.mode = Some("suck"),
-                _ => return Err("Unrecognized mode. See 'help'"),
-            }
-        } else {
-            return Err("Mode not specified. See 'help'");
+                "hook" | "suck" => Ok(mode),
+                _ => Err(String::from("Unrecognized mode. See 'help'")),
+            };
         }
+
+        Err(String::from("Mode not specified. See 'help'"))
+    }
+
+    fn parse_file(file: Option<String>, option: &str) -> Result<String, String> {
+        if file.is_none() {
+            Err(format!("Missing {} file path. See 'help'", option))
+        } else {
+            Ok(file.unwrap())
+        }
+    }
+
+    pub fn build(mut args: impl Iterator<Item = String>) -> Result<Config, String> {
+        args.next(); // Consume program name
+
+        let mode = Config::parse_mode(args.next())?;
+
+        // Setup defaults
+        let mut config = Config {
+            mode,
+            config_file: None,
+            input_file: None,
+            remove_input_file: false,
+            terms: None,
+            output_file: None,
+            verbose: false,
+            interactive: true,
+        };
 
         let mut terms: Vec<String> = Vec::new();
 
@@ -60,19 +67,15 @@ impl Config {
                 break;
             }
 
-            // Support combined options, e.g. -af
+            // Support combined options, e.g. -yf
             for s in arg[1..].chars() {
                 let mut matched = false;
 
                 // Parse mode specific options
-                if config.mode == Some("hook") {
+                if config.mode == String::from("hook") {
                     matched = match s {
                         'o' => {
-                            let output_file = args.next();
-                            if output_file.is_none() {
-                                return Err("Missing output file path. See 'help'");
-                            }
-                            config.output_file = Some(output_file.unwrap());
+                            config.output_file = Some(Config::parse_file(args.next(), "output")?);
                             true
                         }
                         'y' => {
@@ -81,10 +84,10 @@ impl Config {
                         }
                         _ => false,
                     }
-                } else if config.mode == Some("suck") {
+                } else if config.mode == String::from("suck") {
                     matched = match s {
-                        'a' => {
-                            config.extract_audio = true;
+                        'c' => {
+                            config.config_file = Some(Config::parse_file(args.next(), "config")?);
                             true
                         }
                         _ => false,
@@ -97,16 +100,10 @@ impl Config {
 
                 // Fallback to parse general options
                 match s {
-                    'f' => {
-                        let input_file = args.next();
-                        if input_file.is_none() {
-                            return Err("Missing file path. See 'help'");
-                        }
-                        config.input_file = Some(input_file.unwrap());
-                    }
+                    'f' => config.input_file = Some(Config::parse_file(args.next(), "input")?),
                     'd' => config.remove_input_file = true,
                     'v' => config.verbose = true,
-                    _ => return Err("Unrecognized option. See 'help'"),
+                    _ => return Err(String::from("Unrecognized option. See 'help'")),
                 }
             }
         }
@@ -122,7 +119,9 @@ impl Config {
         }
 
         if terms.is_empty() {
-            return Err("Provide either a file path or search terms. See 'help'");
+            return Err(String::from(
+                "Provide either an input file path or search terms. See 'help'",
+            ));
         }
 
         config.terms = Some(terms);
@@ -133,7 +132,7 @@ impl Config {
     fn help() {
         println!(
             "\
-tapeworm - A scraper and downloader for YouTube written in Rust
+tapeworm - A scraper and downloader written in Rust
 
 DESCRIPTION
     tapeworm has two modes, inspired by the anatomy of its real-life eponym.
@@ -173,8 +172,9 @@ OPTIONS
         Automatically select the best scraped link if any are found
 
     Mode 'suck':
-    -a
-        Download as audio, instead of video (the default)
+    -c CONFIG_FILE
+        Configuration file to use for yt-dlp, see https://github.com/yt-dlp/yt-dlp for valid
+        options. If unspecified, yt-dlp is used without any options (only URLs)
 
 EXAMPLES
     # Query for 'artist title' and return a relevant URL
@@ -183,41 +183,11 @@ EXAMPLES
     tapeworm hook -f queries.txt
 
     # Download the URL as video
-    tapeworm suck https://www.youtube.com/watch?v=xxx
+    tapeworm suck https://www.youtube.com/watch?v=123
     # Download the URLs from the file as audio
     tapeworm suck -af urls.txt
 "
         );
-    }
-
-    fn write_default_config_if_missing(self, filename: &str) -> Result<(), Box<dyn Error>> {
-        let config_file_result = File::open(filename);
-        if config_file_result.is_ok() {
-            return Ok(());
-        }
-
-        match config_file_result.unwrap_err().kind() {
-            ErrorKind::NotFound => {
-                let mut file = File::create(filename)?;
-                if filename == "tapeworm-audio.conf" {
-                    file.write_all(b"# Default configuration for downloading audio\n")?;
-                    file.write_all(b"# For options, see https://github.com/yt-dlp/yt-dlp\n\n")?;
-                    file.write_all(b"-r 4M\n")?;
-                    file.write_all(b"-i\n")?;
-                    file.write_all(b"-x\n")?;
-                    file.write_all(b"--audio-format mp3\n")?;
-                    file.write_all(b"-f bestaudio\n")?;
-                    file.write_all(b"--audio-quality 320k\n")?;
-                    file.write_all(b"-o \"%(title)s.%(ext)s\"\n")?;
-                } else {
-                    file.write_all(b"# Default configuration for downloading video\n")?;
-                    file.write_all(b"# For options, see https://github.com/yt-dlp/yt-dlp\n\n")?;
-                    // TODO video defaults
-                }
-                Ok(())
-            }
-            other_error => Err(Box::new(io::Error::from(other_error))),
-        }
     }
 
     /// Scrape YouTube with given inputs.
@@ -262,7 +232,7 @@ EXAMPLES
                 }
 
                 let title = attributes.get(7).unwrap().clone();
-                // Format: /watch?v=kOGx_qFC4aM&pp=ygUEcnVzdA%3D%3D
+                // Format: /watch?v=VIDEO_ID&OTHER_ARGS
                 let rel_url = attributes.get(9).unwrap();
                 let url = format!(
                     "https://www.youtube.com{}",
@@ -329,15 +299,11 @@ EXAMPLES
             .chain(urls.iter().map(|s| s.to_string()))
             .collect();
 
-        let config_file = if self.extract_audio {
-            "tapeworm-audio.conf"
-        } else {
-            "tapeworm-video.conf"
-        };
-        self.write_default_config_if_missing(config_file)?;
+        if let Some(_config_file) = self.config_file {
+            // TODO use the config-location
+        }
 
         println!("Downloading {} ...", inputs.join(" "));
-        println!("Using config file: {}", config_file);
 
         // TODO download using yt-dlp
         // let output = Command::new("yt-dlp")
@@ -358,6 +324,7 @@ EXAMPLES
 }
 
 pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    // Construct the inputs
     let mut inputs = Vec::new();
     if let Some(input_file) = &config.input_file {
         let contents = fs::read_to_string(input_file)?;
@@ -374,8 +341,8 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    match config.mode {
-        Some("hook") => {
+    match config.mode.as_str() {
+        "hook" => {
             let urls = config.hook(inputs)?;
 
             // Output
@@ -394,16 +361,13 @@ pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
                     if config.verbose {
                         println!("Removing {} ...", input_file);
                     }
-                    // TODO maybe removing is better, and we can add stuff to the input file by just
-                    // recreating it, or maybe even using tapeworm, e.g. `tapeworm add URL`
-                    // I like the idea of tapeworm managing the backlog
                     fs::remove_file(input_file)?;
                 }
             }
 
             Ok(())
         }
-        Some("suck") => config.suck(inputs),
+        "suck" => config.suck(inputs),
         _ => Ok(()),
     }
 }
