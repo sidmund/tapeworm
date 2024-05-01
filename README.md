@@ -59,7 +59,7 @@ This specifies library settings. If this file is not present, the defaults are u
 ```
 CLEAR_INPUT=false # whether to clear input.txt after downloading
 AUTO_SCRAPE=false # false to manually select a URL, true to use the first found URL
-DEBUG=false # show verbose output
+VERBOSE=false # show verbose output
 ```
 
 #### input.txt

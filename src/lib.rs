@@ -242,7 +242,7 @@ EXAMPLE
     fn yt_dlp_conf_exists(&self) -> Result<Option<bool>, Box<dyn Error>> {
         if fs::metadata(&self.yt_dlp_conf_path).is_err() {
             println!(
-            "yt-dlp config not found at {}
+            "Warning: {} not found
 If you continue, yt-dlp will be invoked without any options, which will yield inconsistent results. Do you want to continue regardless? y/N",
             self.yt_dlp_conf_path.to_str().unwrap()
         );
@@ -369,7 +369,8 @@ fn add(config: Config) -> Result<(), Box<dyn Error>> {
         .append(true)
         .open(&config.input_path)?;
 
-    input_file.write_all(config.terms.unwrap().join("\n").as_bytes())?;
+    let contents = format!("{}\n", config.terms.unwrap().join("\n"));
+    input_file.write_all(contents.as_bytes())?;
 
     Ok(())
 }
@@ -397,7 +398,9 @@ fn download(mut config: Config) -> Result<(), Box<dyn Error>> {
 
     let inputs = fs::read_to_string(&config.input_path)?;
     if inputs.is_empty() {
-        println!("Nothing to download. Library is empty.");
+        if config.verbose {
+            println!("Nothing to download. Library is empty.");
+        }
         return Ok(());
     }
 
