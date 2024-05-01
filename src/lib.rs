@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::fs::{self, File};
+use std::fs;
 use std::io::{self, Write};
+use std::path::PathBuf;
 use std::process::{self, Command};
 use url::Url;
 
@@ -10,7 +11,7 @@ pub struct Config {
     pub library: String,
 
     // Add
-    pub terms: Option<Vec<String>>, // FILE... | TERM... | URL...
+    pub terms: Option<Vec<String>>, // TERM... | URL...
 
     // CLI download options
     pub download_options: HashMap<String, bool>,
@@ -18,6 +19,12 @@ pub struct Config {
     pub clear_input: bool,
     pub auto_scrape: bool,
     pub verbose: bool,
+
+    // Paths
+    pub lib_path: PathBuf,
+    pub lib_conf_path: PathBuf,
+    pub input_path: PathBuf,
+    pub yt_dlp_conf_path: PathBuf,
 }
 
 impl Config {
@@ -48,7 +55,7 @@ impl Config {
         let first = args.next();
         if first.is_none() {
             return Err(String::from(
-                "Provide either input file(s), or search term(s), or URL(s). See 'help'",
+                "Provide either search term(s), or URL(s). See 'help'",
             ));
         }
 
@@ -62,16 +69,6 @@ impl Config {
             while let Some(arg) = args.next() {
                 if Url::parse(&arg).is_err() {
                     return Err(String::from(format!("{} is not a URL. See 'help'", arg)));
-                }
-                terms.push(arg);
-            }
-            self.terms = Some(terms);
-        } else if fs::metadata(&first).is_ok() {
-            terms.push(first);
-            // If the first term is an existent file path, enforce that the rest are too
-            while let Some(arg) = args.next() {
-                if fs::metadata(&arg).is_err() {
-                    return Err(String::from(format!("{} is not a file. See 'help'", arg)));
                 }
                 terms.push(arg);
             }
@@ -119,6 +116,24 @@ impl Config {
         let command = Config::parse_command(args.next())?;
         let library = Config::parse_library(args.next())?;
 
+        let lib_path = PathBuf::from(dirs::config_dir().unwrap())
+            .join("tapeworm")
+            .join(library.clone());
+
+        let mut lib_conf_path = lib_path.join("lib");
+        lib_conf_path.set_extension("conf");
+
+        let mut input_path = lib_path.join("input");
+        input_path.set_extension("txt");
+
+        let mut yt_dlp_conf_path = lib_path.join("yt-dlp");
+        yt_dlp_conf_path.set_extension("conf");
+
+        println!("Using library path: {:?}", lib_path);
+        println!("Using input path  : {:?}", input_path);
+        println!("Using config path : {:?}", lib_conf_path);
+        println!("Using yt-dlp path : {:?}", yt_dlp_conf_path);
+
         // Setup defaults
         let mut config = Config {
             command,
@@ -128,6 +143,10 @@ impl Config {
             clear_input: false,
             auto_scrape: false,
             verbose: false,
+            lib_path,
+            lib_conf_path,
+            input_path,
+            yt_dlp_conf_path,
         };
 
         match config.command.as_str() {
@@ -148,11 +167,10 @@ COMMANDS
     tapeworm help
         Show this help message
 
-    tapeworm add LIBRARY [FILE... | TERM... | URL...]
+    tapeworm add LIBRARY [TERM... | URL...]
         Add a term or URL to the library. If LIBRARY doesn't exist, it is created.
-        Each FILE may contain queries or URLs, separated on newlines;
         TERM consists of space-separated terms, combined to form a single query;
-        URL consists of space-separated URLs, treated as separate
+        URL consists of space-separated URLs, treated as separate inputs
 
     tapeworm download LIBRARY [OPTIONS]
         Given the inputs in ~/.config/tapeworm/LIBRARY/input.txt,
@@ -178,33 +196,10 @@ EXAMPLE
         );
     }
 
-    fn get_library_path(&self) -> String {
-        let library_path = format!(
-            "{}/.config/tapeworm/{}/",
-            std::env::home_dir().unwrap().to_str().unwrap(),
-            self.library
-        );
-        println!("Using library path: {}", library_path);
-
-        library_path
-    }
-
-    fn library_exists(&self) -> Result<String, Box<dyn Error>> {
-        let library_path = self.get_library_path();
-
-        if fs::metadata(&library_path).is_err() {
-            Err(format!("Library not found: {}", library_path).into())
-        } else {
-            Ok(library_path)
-        }
-    }
-
-    fn get_download_options(&mut self, lib_conf_path: String) -> Result<(), Box<dyn Error>> {
-        println!("Using config path: {}", lib_conf_path);
-
-        if fs::metadata(&lib_conf_path).is_ok() {
+    fn get_download_options(&mut self) -> Result<(), Box<dyn Error>> {
+        if fs::metadata(&self.lib_conf_path).is_ok() {
             // Override defaults with config file
-            let lib_conf = fs::read_to_string(lib_conf_path)?;
+            let lib_conf = fs::read_to_string(&self.lib_conf_path)?;
             let options: Vec<String> = lib_conf
                 .lines()
                 .map(|line| line.trim().to_lowercase())
@@ -244,14 +239,12 @@ EXAMPLE
         Ok(())
     }
 
-    fn yt_dlp_conf_exists(yt_dlp_conf_path: String) -> Result<Option<bool>, Box<dyn Error>> {
-        println!("Using yt-dlp path: {}", yt_dlp_conf_path);
-
-        if fs::metadata(&yt_dlp_conf_path).is_err() {
+    fn yt_dlp_conf_exists(&self) -> Result<Option<bool>, Box<dyn Error>> {
+        if fs::metadata(&self.yt_dlp_conf_path).is_err() {
             println!(
             "yt-dlp config not found at {}
 If you continue, yt-dlp will be invoked without any options, which will yield inconsistent results. Do you want to continue regardless? y/N",
-            yt_dlp_conf_path
+            self.yt_dlp_conf_path.to_str().unwrap()
         );
 
             let mut input = String::new();
@@ -264,16 +257,6 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
             Ok(Some(false))
         } else {
             Ok(Some(true))
-        }
-    }
-
-    fn input_file_exists(input_path: &String) -> Result<(), Box<dyn Error>> {
-        println!("Using input path: {}", input_path);
-
-        if fs::metadata(input_path).is_err() {
-            Err(format!("Input file not found: {}", input_path).into())
-        } else {
-            Ok(())
         }
     }
 }
@@ -374,54 +357,51 @@ fn scrape(config: &Config, queries: Vec<String>) -> Result<Vec<String>, Box<dyn 
     Ok(urls)
 }
 
+/// Attempts to append all terms to the input file.
+/// The library folder and input file are created if they do not exist.
 fn add(config: Config) -> Result<(), Box<dyn Error>> {
-    // Create library folder if not present
-    let library_path = config.get_library_path();
-    if fs::metadata(&library_path).is_err() {
-        fs::create_dir_all(&library_path)?;
+    if fs::metadata(&config.lib_path).is_err() {
+        fs::create_dir_all(&config.lib_path)?;
     }
 
-    // Create input file if not present
-    let input_path = format!("{}/input.txt", library_path);
-    println!("Using input path: {}", input_path);
-    let mut input_file = File::open(&input_path);
-    if input_file.is_err() {
-        input_file = Ok(File::create(&input_path)?);
-    }
+    let mut input_file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&config.input_path)?;
 
-    // Write all terms to file
-    // TODO if they are files, write their contents instead
-    // TODO does this append?
-    input_file
-        .unwrap()
-        .write_all(config.terms.unwrap().join("\n").as_bytes())?;
+    input_file.write_all(config.terms.unwrap().join("\n").as_bytes())?;
 
     Ok(())
 }
 
 fn download(mut config: Config) -> Result<(), Box<dyn Error>> {
-    let library_path = config.library_exists()?;
+    if fs::metadata(&config.lib_path).is_err() {
+        return Err(format!("Library not found: {}", config.lib_path.to_str().unwrap()).into());
+    }
 
-    let lib_conf_path = format!("{}/lib.conf", library_path);
-    config.get_download_options(lib_conf_path)?;
+    config.get_download_options()?;
 
-    let yt_dlp_conf_path = format!("{}/yt-dlp.conf", library_path);
-    let use_yt_dlp_conf = if let Some(value) = Config::yt_dlp_conf_exists(yt_dlp_conf_path)? {
+    let use_yt_dlp_conf = if let Some(value) = config.yt_dlp_conf_exists()? {
         value
     } else {
         return Ok(()); // User wants to abort when config is not found
     };
 
-    let input_path = format!("{}/input.txt", library_path);
-    Config::input_file_exists(&input_path)?;
+    if fs::metadata(&config.input_path).is_err() {
+        return Err(format!(
+            "Input file not found: {}",
+            config.input_path.to_str().unwrap()
+        )
+        .into());
+    }
 
-    let inputs = fs::read_to_string(&input_path)?;
+    let inputs = fs::read_to_string(&config.input_path)?;
     if inputs.is_empty() {
         println!("Nothing to download. Library is empty.");
         return Ok(());
     }
 
-    let inputs: Vec<String> = fs::read_to_string(input_path.clone())?
+    let inputs: Vec<String> = fs::read_to_string(config.input_path.clone())?
         .lines()
         .map(|s| s.to_string())
         .collect();
@@ -462,8 +442,7 @@ fn download(mut config: Config) -> Result<(), Box<dyn Error>> {
     assert!(output.status.success());
 
     if config.clear_input {
-        // TODO does this overwrite?
-        File::create(input_path)?;
+        fs::write(&config.input_path, "")?;
     }
 
     Ok(())
