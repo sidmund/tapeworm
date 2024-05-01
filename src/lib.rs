@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
@@ -412,13 +412,13 @@ fn download(mut config: Config) -> Result<(), Box<dyn Error>> {
     let (urls, queries): (Vec<_>, Vec<_>) = inputs.iter().partition(|s| Url::parse(s).is_ok());
 
     let scrape_inputs = queries.iter().map(|s| s.to_string()).collect();
-    let scraped = scrape(&config, scrape_inputs)?;
-    let inputs: Vec<String> = scraped
-        .into_iter()
-        .chain(urls.iter().map(|s| s.to_string()))
-        .collect();
 
-    println!("Downloading {} ...", inputs.join(" "));
+    // Only keep unique URLs
+    let mut inputs: HashSet<String> = HashSet::new();
+    inputs.extend(scrape(&config, scrape_inputs)?);
+    inputs.extend(urls.iter().map(|s| s.to_string()));
+
+    println!("Downloading {:?} ...", inputs);
 
     // TODO download using yt-dlp
     let output = if use_yt_dlp_conf {
