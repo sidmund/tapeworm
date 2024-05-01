@@ -301,7 +301,9 @@ fn scrape_page(
 
     if config.auto_scrape {
         // Assume the first url is the best matched one
-        return Ok(Some(results.get(0).unwrap().1.clone()));
+        let url = results.get(0).unwrap().1.clone();
+        println!("Found: {}", url);
+        return Ok(Some(url));
     }
 
     // Prompt user to select a result
@@ -344,9 +346,7 @@ fn scrape(config: &Config, queries: Vec<String>) -> Result<Vec<String>, Box<dyn 
 
     for (i, query) in queries.iter().enumerate() {
         let query = format!("https://www.youtube.com/results?search_query={}", query);
-        if config.verbose || !config.auto_scrape {
-            println!("Scraping {} of {}: {} ...", i + 1, total, query);
-        }
+        println!("Scraping {} of {}: {} ...", i + 1, total, query);
 
         let url = scrape_page(&config, &tab, query)?;
         if let Some(url) = url {
