@@ -344,8 +344,8 @@ fn scrape(config: &Config, queries: Vec<String>) -> Result<Vec<String>, Box<dyn 
 
     for (i, query) in queries.iter().enumerate() {
         let query = format!("https://www.youtube.com/results?search_query={}", query);
-        if config.verbose {
-            println!("Scraping {} of {}: {}", i + 1, total, query);
+        if config.verbose || !config.auto_scrape {
+            println!("Scraping {} of {}: {} ...", i + 1, total, query);
         }
 
         let url = scrape_page(&config, &tab, query)?;
