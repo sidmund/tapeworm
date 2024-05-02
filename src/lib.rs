@@ -1,10 +1,15 @@
 use std::collections::{HashMap, HashSet};
-use std::error::Error;
 use std::fs;
-use std::io::{self, Write};
+use std::io::{self, BufRead, BufReader, ErrorKind, Write};
 use std::path::PathBuf;
-use std::process::{self, Command};
+use std::process::{self, Command, Stdio};
 use url::Url;
+
+type UnitResult = Result<(), Box<dyn std::error::Error>>;
+type BoolResult = Result<Option<bool>, Box<dyn std::error::Error>>;
+type StringResult = Result<String, Box<dyn std::error::Error>>;
+type StringOptionResult = Result<Option<String>, Box<dyn std::error::Error>>;
+type StringVecResult = Result<Vec<String>, Box<dyn std::error::Error>>;
 
 pub struct Config {
     pub command: String,
@@ -196,7 +201,7 @@ EXAMPLE
         );
     }
 
-    fn get_download_options(&mut self) -> Result<(), Box<dyn Error>> {
+    fn get_download_options(&mut self) -> UnitResult {
         if fs::metadata(&self.lib_conf_path).is_ok() {
             // Override defaults with config file
             let lib_conf = fs::read_to_string(&self.lib_conf_path)?;
@@ -239,7 +244,7 @@ EXAMPLE
         Ok(())
     }
 
-    fn yt_dlp_conf_exists(&self) -> Result<Option<bool>, Box<dyn Error>> {
+    fn yt_dlp_conf_exists(&self) -> BoolResult {
         if fs::metadata(&self.yt_dlp_conf_path).is_err() {
             println!(
             "Warning: {} not found
@@ -259,11 +264,7 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
     }
 }
 
-fn scrape_page(
-    config: &Config,
-    tab: &headless_chrome::Tab,
-    page: String,
-) -> Result<Option<String>, Box<dyn Error>> {
+fn scrape_page(config: &Config, tab: &headless_chrome::Tab, page: String) -> StringOptionResult {
     tab.navigate_to(page.as_str())?;
 
     let mut results = Vec::new();
@@ -321,14 +322,14 @@ fn scrape_page(
     Ok(Some(results.get(selected).unwrap().1.clone()))
 }
 
-fn input() -> Result<String, Box<dyn Error>> {
+fn input() -> StringResult {
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     Ok(input.trim().to_lowercase())
 }
 
 /// Returns a list of URLs, one per input query
-fn scrape(config: &Config, queries: Vec<String>) -> Result<Vec<String>, Box<dyn Error>> {
+fn scrape(config: &Config, queries: Vec<String>) -> StringVecResult {
     if queries.is_empty() {
         return Ok(queries);
     }
@@ -359,7 +360,7 @@ fn scrape(config: &Config, queries: Vec<String>) -> Result<Vec<String>, Box<dyn 
 
 /// Attempts to append all terms to the input file.
 /// The library folder and input file are created if they do not exist.
-fn add(config: Config) -> Result<(), Box<dyn Error>> {
+fn add(config: Config) -> UnitResult {
     if fs::metadata(&config.lib_path).is_err() {
         fs::create_dir_all(&config.lib_path)?;
     }
@@ -375,7 +376,7 @@ fn add(config: Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn download(mut config: Config) -> Result<(), Box<dyn Error>> {
+fn download(mut config: Config) -> UnitResult {
     if fs::metadata(&config.lib_path).is_err() {
         return Err(format!("Library not found: {}", config.lib_path.to_str().unwrap()).into());
     }
@@ -423,24 +424,33 @@ fn download(mut config: Config) -> Result<(), Box<dyn Error>> {
 
     println!("Downloading {} ...", inputs);
 
-    let output = if use_yt_dlp_conf {
+    let stdout = if use_yt_dlp_conf {
         Command::new("yt-dlp")
             .arg("--config-location")
             .arg(config.yt_dlp_conf_path)
             .arg(inputs)
-            .output()
-            .expect("failed to execute yt-dlp")
+            .stdout(Stdio::piped())
+            .spawn()?
+            .stdout
+            .ok_or_else(|| {
+                std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
+            })?
     } else {
         Command::new("yt-dlp")
             .arg(inputs)
-            .output()
-            .expect("failed to execute yt-dlp")
+            .stdout(Stdio::piped())
+            .spawn()?
+            .stdout
+            .ok_or_else(|| {
+                std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
+            })?
     };
 
-    println!("status: {}", output.status);
-    println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
-    println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
-    assert!(output.status.success());
+    let reader = BufReader::new(stdout);
+    reader
+        .lines()
+        .filter_map(|line| line.ok())
+        .for_each(|line| println!("{}", line));
 
     if config.clear_input {
         fs::write(&config.input_path, "")?;
@@ -449,7 +459,7 @@ fn download(mut config: Config) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+pub fn run(config: Config) -> UnitResult {
     match config.command.as_str() {
         "add" => add(config),
         "download" => download(config),
