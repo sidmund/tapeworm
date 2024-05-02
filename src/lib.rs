@@ -418,25 +418,23 @@ fn download(mut config: Config) -> Result<(), Box<dyn Error>> {
     inputs.extend(scrape(&config, scrape_inputs)?);
     inputs.extend(urls.iter().map(|s| s.to_string()));
 
-    println!("Downloading {:?} ...", inputs);
+    let inputs: Vec<String> = inputs.iter().map(|s| s.to_owned()).collect();
+    let inputs = inputs.join(" ");
 
-    // TODO download using yt-dlp
+    println!("Downloading {} ...", inputs);
+
     let output = if use_yt_dlp_conf {
-        Command::new("echo")
-            .arg("hello")
+        Command::new("yt-dlp")
+            .arg("--config-location")
+            .arg(config.yt_dlp_conf_path)
+            .arg(inputs)
             .output()
             .expect("failed to execute yt-dlp")
-        // Command::new("yt-dlp")
-        //     .arg("--config-location")
-        //     .arg(config_file)
-        //     .arg(inputs.join(" "))
     } else {
-        Command::new("echo")
-            .arg("hello")
+        Command::new("yt-dlp")
+            .arg(inputs)
             .output()
             .expect("failed to execute yt-dlp")
-        // Command::new("yt-dlp")
-        //     .arg(inputs.join(" "))
     };
 
     println!("status: {}", output.status);
