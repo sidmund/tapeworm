@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet};
-use std::fs;
 use std::io::{self, BufRead, BufReader, ErrorKind, Write};
 use std::path::PathBuf;
 use std::process::{self, Command, Stdio};
+use std::{env, fs};
 use url::Url;
 
+type ConfigResult = Result<Config, Box<dyn std::error::Error>>;
 type UnitResult = Result<(), Box<dyn std::error::Error>>;
 type BoolResult = Result<Option<bool>, Box<dyn std::error::Error>>;
 type StringResult = Result<String, Box<dyn std::error::Error>>;
@@ -30,10 +31,13 @@ pub struct Config {
     pub lib_conf_path: PathBuf,
     pub input_path: PathBuf,
     pub yt_dlp_conf_path: PathBuf,
+
+    // Tagging
+    pub enable_tagging: bool,
 }
 
 impl Config {
-    fn parse_command(command: Option<String>) -> Result<String, String> {
+    fn parse_command(command: Option<String>) -> StringResult {
         if let Some(command) = command {
             return match command.as_str() {
                 "help" | "h" | "-h" | "--help" => {
@@ -41,27 +45,25 @@ impl Config {
                     process::exit(0);
                 }
                 "add" | "download" => Ok(command),
-                _ => Err(String::from("Unrecognized command. See 'help'")),
+                _ => Err("Unrecognized command. See 'help'".into()),
             };
         }
 
-        Err(String::from("Command not specified. See 'help'"))
+        Err("Command not specified. See 'help'".into())
     }
 
-    fn parse_library(library: Option<String>) -> Result<String, String> {
+    fn parse_library(library: Option<String>) -> StringResult {
         if let Some(library) = library {
             Ok(library)
         } else {
-            Err(String::from("Library not specified. See 'help'"))
+            Err("Library not specified. See 'help'".into())
         }
     }
 
-    fn parse_terms(&mut self, mut args: impl Iterator<Item = String>) -> Result<(), String> {
+    fn parse_terms(&mut self, mut args: impl Iterator<Item = String>) -> UnitResult {
         let first = args.next();
         if first.is_none() {
-            return Err(String::from(
-                "Provide either search term(s), or URL(s). See 'help'",
-            ));
+            return Err("Provide either search term(s), or URL(s). See 'help'".into());
         }
 
         let mut terms: Vec<String> = Vec::new();
@@ -73,7 +75,7 @@ impl Config {
             // If the first term parses as a URL, enforce that the rest are URLs too
             while let Some(arg) = args.next() {
                 if Url::parse(&arg).is_err() {
-                    return Err(String::from(format!("{} is not a URL. See 'help'", arg)));
+                    return Err(format!("{} is not a URL. See 'help'", arg).into());
                 }
                 terms.push(arg);
             }
@@ -90,7 +92,7 @@ impl Config {
         Ok(())
     }
 
-    fn parse_options(&mut self, mut args: impl Iterator<Item = String>) -> Result<(), String> {
+    fn parse_options(&mut self, mut args: impl Iterator<Item = String>) -> UnitResult {
         while let Some(arg) = args.next() {
             // No (more) options
             if !arg.starts_with('-') {
@@ -107,98 +109,12 @@ impl Config {
                         .download_options
                         .insert(String::from("auto_scrape"), true),
                     'v' => self.download_options.insert(String::from("verbose"), true),
-                    _ => return Err(String::from("Unrecognized option. See 'help'")),
+                    _ => return Err("Unrecognized option. See 'help'".into()),
                 };
             }
         }
 
         Ok(())
-    }
-
-    pub fn build(mut args: impl Iterator<Item = String>) -> Result<Config, String> {
-        args.next(); // Consume program name
-
-        let command = Config::parse_command(args.next())?;
-        let library = Config::parse_library(args.next())?;
-
-        let lib_path = PathBuf::from(dirs::config_dir().unwrap())
-            .join("tapeworm")
-            .join(library.clone());
-
-        let mut lib_conf_path = lib_path.join("lib");
-        lib_conf_path.set_extension("conf");
-
-        let mut input_path = lib_path.join("input");
-        input_path.set_extension("txt");
-
-        let mut yt_dlp_conf_path = lib_path.join("yt-dlp");
-        yt_dlp_conf_path.set_extension("conf");
-
-        println!("Using library path: {:?}", lib_path);
-        println!("Using input path  : {:?}", input_path);
-        println!("Using config path : {:?}", lib_conf_path);
-        println!("Using yt-dlp path : {:?}", yt_dlp_conf_path);
-
-        // Setup defaults
-        let mut config = Config {
-            command,
-            library,
-            terms: None,
-            download_options: HashMap::new(),
-            clear_input: false,
-            auto_scrape: false,
-            verbose: false,
-            lib_path,
-            lib_conf_path,
-            input_path,
-            yt_dlp_conf_path,
-        };
-
-        match config.command.as_str() {
-            "add" => config.parse_terms(args)?,
-            "download" => config.parse_options(args)?,
-            _ => return Err(String::from("Unrecognized command. See 'help'")),
-        };
-
-        Ok(config)
-    }
-
-    fn help() {
-        println!(
-            "\
-tapeworm - A scraper and downloader written in Rust
-
-COMMANDS
-    tapeworm help
-        Show this help message
-
-    tapeworm add LIBRARY [TERM... | URL...]
-        Add a term or URL to the library. If LIBRARY doesn't exist, it is created.
-        TERM consists of space-separated terms, combined to form a single query;
-        URL consists of space-separated URLs, treated as separate inputs
-
-    tapeworm download LIBRARY [OPTIONS]
-        Given the inputs in ~/.config/tapeworm/LIBRARY/input.txt,
-        scrape any queries and download all (scraped) URLs,
-        using the config in ~/.config/tapeworm/LIBRARY/yt-dlp.conf
-
-DOWNLOAD OPTIONS
-    The options from ~/.config/tapeworm/LIBRARY/lib.conf are loaded first.
-    Setting a CLI option will override its value in the lib.conf file, if present.
-
-    -c      Clear the input file after scraping
-    -v      Verbosely show what is being processed
-    -y      Automatically select the best scraped link if any are found
-
-EXAMPLE
-    # Create the library by recording the first query
-    tapeworm LIBRARY the artist - a song  # records 'the artist - a song'
-    # Add a URL
-    tapeworm LIBRARY https://youtube.com/watch?v=123
-    # Scrape/download all
-    tapeworm LIBRARY
-"
-        );
     }
 
     fn get_download_options(&mut self) -> UnitResult {
@@ -242,6 +158,96 @@ EXAMPLE
         }
 
         Ok(())
+    }
+
+    pub fn build(mut args: impl Iterator<Item = String>) -> ConfigResult {
+        args.next(); // Consume program name
+
+        let command = Config::parse_command(args.next())?;
+        let library = Config::parse_library(args.next())?;
+
+        let lib_path = PathBuf::from(dirs::config_dir().unwrap())
+            .join("tapeworm")
+            .join(library.clone());
+
+        let mut lib_conf_path = lib_path.join("lib");
+        lib_conf_path.set_extension("conf");
+
+        let mut input_path = lib_path.join("input");
+        input_path.set_extension("txt");
+
+        let mut yt_dlp_conf_path = lib_path.join("yt-dlp");
+        yt_dlp_conf_path.set_extension("conf");
+
+        println!("Using library path: {:?}", lib_path);
+        println!("Using input path  : {:?}", input_path);
+        println!("Using config path : {:?}", lib_conf_path);
+        println!("Using yt-dlp path : {:?}", yt_dlp_conf_path);
+
+        // Setup defaults
+        let mut config = Config {
+            command,
+            library,
+            terms: None,
+            download_options: HashMap::new(),
+            clear_input: false,
+            auto_scrape: false,
+            verbose: false,
+            lib_path,
+            lib_conf_path,
+            input_path,
+            yt_dlp_conf_path,
+            enable_tagging: false,
+        };
+
+        match config.command.as_str() {
+            "add" => config.parse_terms(args)?,
+            "download" => {
+                config.parse_options(args)?;
+                config.get_download_options()?;
+            }
+            _ => return Err("Unrecognized command. See 'help'".into()),
+        };
+
+        Ok(config)
+    }
+
+    fn help() {
+        println!(
+            "\
+tapeworm - A scraper and downloader written in Rust
+
+COMMANDS
+    tapeworm help
+        Show this help message
+
+    tapeworm add LIBRARY [TERM... | URL...]
+        Add a term or URL to the library. If LIBRARY doesn't exist, it is created.
+        TERM consists of space-separated terms, combined to form a single query;
+        URL consists of space-separated URLs, treated as separate inputs
+
+    tapeworm download LIBRARY [OPTIONS]
+        Given the inputs in ~/.config/tapeworm/LIBRARY/input.txt,
+        scrape any queries and download all (scraped) URLs,
+        using the config in ~/.config/tapeworm/LIBRARY/yt-dlp.conf
+
+DOWNLOAD OPTIONS
+    The options from ~/.config/tapeworm/LIBRARY/lib.conf are loaded first.
+    Setting a CLI option will override its value in the lib.conf file, if present.
+
+    -c      Clear the input file after scraping
+    -v      Verbosely show what is being processed
+    -y      Automatically select the best scraped link if any are found
+
+EXAMPLE
+    # Create the library by recording the first query
+    tapeworm LIBRARY the artist - a song  # records 'the artist - a song'
+    # Add a URL
+    tapeworm LIBRARY https://youtube.com/watch?v=123
+    # Scrape/download all
+    tapeworm LIBRARY
+"
+        );
     }
 
     fn yt_dlp_conf_exists(&self) -> BoolResult {
@@ -360,7 +366,7 @@ fn scrape(config: &Config, queries: Vec<String>) -> StringVecResult {
 
 /// Attempts to append all terms to the input file.
 /// The library folder and input file are created if they do not exist.
-fn add(config: Config) -> UnitResult {
+fn add(config: &Config) -> UnitResult {
     if fs::metadata(&config.lib_path).is_err() {
         fs::create_dir_all(&config.lib_path)?;
     }
@@ -370,18 +376,16 @@ fn add(config: Config) -> UnitResult {
         .append(true)
         .open(&config.input_path)?;
 
-    let contents = format!("{}\n", config.terms.unwrap().join("\n"));
+    let contents = format!("{}\n", config.terms.as_ref().unwrap().join("\n"));
     input_file.write_all(contents.as_bytes())?;
 
     Ok(())
 }
 
-fn download(mut config: Config) -> UnitResult {
+fn download(config: &Config) -> UnitResult {
     if fs::metadata(&config.lib_path).is_err() {
         return Err(format!("Library not found: {}", config.lib_path.to_str().unwrap()).into());
     }
-
-    config.get_download_options()?;
 
     let use_yt_dlp_conf = if let Some(value) = config.yt_dlp_conf_exists()? {
         value
@@ -419,15 +423,23 @@ fn download(mut config: Config) -> UnitResult {
     inputs.extend(scrape(&config, scrape_inputs)?);
     inputs.extend(urls.iter().map(|s| s.to_string()));
 
+    let total = inputs.len();
+
+    if config.verbose {
+        println!("Downloading {} URLs:", total);
+        for input in &inputs {
+            println!("  {}", input);
+        }
+    }
+
     let inputs: Vec<String> = inputs.iter().map(|s| s.to_owned()).collect();
     let inputs = inputs.join(" ");
 
-    println!("Downloading {} ...", inputs);
-
+    // Download with yt-dlp
     let stdout = if use_yt_dlp_conf {
         Command::new("yt-dlp")
             .arg("--config-location")
-            .arg(config.yt_dlp_conf_path)
+            .arg(&config.yt_dlp_conf_path)
             .arg(inputs)
             .stdout(Stdio::piped())
             .spawn()?
@@ -445,7 +457,6 @@ fn download(mut config: Config) -> UnitResult {
                 std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
             })?
     };
-
     let reader = BufReader::new(stdout);
     reader
         .lines()
@@ -459,10 +470,27 @@ fn download(mut config: Config) -> UnitResult {
     Ok(())
 }
 
+fn tag(_config: &Config) -> UnitResult {
+    // Find downloaded files
+    let cwd = env::current_dir()?;
+    for entry in fs::read_dir(cwd)? {
+        let entry = entry?;
+        println!("{}", entry.file_name().to_str().unwrap());
+    }
+
+    Ok(())
+}
+
 pub fn run(config: Config) -> UnitResult {
     match config.command.as_str() {
-        "add" => add(config),
-        "download" => download(config),
+        "add" => add(&config),
+        "download" => {
+            download(&config)?;
+            if config.enable_tagging {
+                tag(&config)?;
+            }
+            Ok(())
+        }
         _ => Ok(()),
     }
 }
