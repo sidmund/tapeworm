@@ -31,6 +31,7 @@ pub struct Config {
     pub lib_conf_path: PathBuf,
     pub input_path: PathBuf,
     pub yt_dlp_conf_path: PathBuf,
+    pub target_dir: Option<PathBuf>,
 
     // Tagging
     pub enable_tagging: bool,
@@ -124,7 +125,7 @@ impl Config {
             let lib_conf = fs::read_to_string(&self.lib_conf_path)?;
             let options: Vec<String> = lib_conf
                 .lines()
-                .map(|line| line.trim().to_lowercase())
+                .map(|line| line.trim().to_string())
                 .collect();
             for line in options {
                 let parts: Vec<String> = line.split("=").map(|s| s.to_string()).collect();
@@ -132,7 +133,7 @@ impl Config {
                     return Err(format!("Invalid config line: {}", line).into());
                 }
 
-                match parts[0].as_str() {
+                match parts[0].to_lowercase().as_str() {
                     "auto_scrape" => {
                         self.auto_scrape = parts[1].parse::<bool>()?;
                     }
@@ -141,6 +142,9 @@ impl Config {
                     }
                     "enable_tagging" => {
                         self.enable_tagging = parts[1].parse::<bool>()?;
+                    }
+                    "target_dir" => {
+                        self.target_dir = Some(PathBuf::from(parts[1].clone()));
                     }
                     "verbose" => {
                         self.verbose = parts[1].parse::<bool>()?;
@@ -204,6 +208,7 @@ impl Config {
             lib_conf_path,
             input_path,
             yt_dlp_conf_path,
+            target_dir: None,
             enable_tagging: false,
             yt_dlp_output_dir: None,
         };
@@ -249,11 +254,11 @@ DOWNLOAD OPTIONS
 
 EXAMPLE
     # Create the library by recording the first query
-    tapeworm LIBRARY the artist - a song  # records 'the artist - a song'
+    tapeworm add LIBRARY the artist - a song  # records 'the artist - a song'
     # Add a URL
-    tapeworm LIBRARY https://youtube.com/watch?v=123
+    tapeworm add LIBRARY https://youtube.com/watch?v=123
     # Scrape/download all
-    tapeworm LIBRARY
+    tapeworm download LIBRARY
 "
         );
     }
@@ -480,17 +485,55 @@ fn tag(config: &Config) -> UnitResult {
     if !config.enable_tagging {
         return Ok(());
     } else if config.yt_dlp_output_dir.is_none() {
-        return Err("The directory where yt-dlp downloads to is not known, set 'YT_DLP_OUTPUT_DIR' in 'LIBRARY/lib.conf'".into());
+        return Err("'YT_DLP_OUTPUT_DIR' must be set when tagging is enabled. See 'help'".into());
     }
 
     // yt_dlp_output_dir is appended to lib_path (if relative),
     // otherwise it will replace it (absolute)
-    let wd = PathBuf::from(config.lib_path.clone()).join(config.yt_dlp_output_dir.clone().unwrap());
-
-    // Find downloaded files
-    for entry in fs::read_dir(wd)? {
+    let downloads =
+        PathBuf::from(config.lib_path.clone()).join(config.yt_dlp_output_dir.clone().unwrap());
+    for entry in fs::read_dir(downloads)? {
         let entry = entry?;
         println!("{}", entry.file_name().to_str().unwrap());
+    }
+
+    Ok(())
+}
+
+/// Attempt to move all downloaded (and processed) files in YT_DLP_OUTPUT_DIR to TARGET_DIR.
+/// TARGET_DIR is created if not present.
+/// Directories are not moved, only files.
+/// If a file already exists in TARGET_DIR, it will be overwritten.
+fn post_process(config: &Config) -> UnitResult {
+    if config.target_dir.is_none() {
+        return Ok(());
+    } else if config.yt_dlp_output_dir.is_none() {
+        return Err(
+            "'YT_DLP_OUTPUT_DIR' must be set for moving downloads to 'TARGET_DIR'. See 'help'"
+                .into(),
+        );
+    }
+
+    let target_dir =
+        PathBuf::from(config.lib_path.clone()).join(config.target_dir.clone().unwrap());
+    if fs::metadata(&target_dir).is_err() {
+        fs::create_dir_all(&target_dir)?;
+    }
+
+    let downloads =
+        PathBuf::from(config.lib_path.clone()).join(config.yt_dlp_output_dir.clone().unwrap());
+    for entry in fs::read_dir(downloads)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            continue;
+        }
+
+        fs::rename(entry.path(), target_dir.join(entry.file_name()))?;
+        println!(
+            "Moved {} to {}",
+            entry.file_name().to_str().unwrap(),
+            target_dir.display()
+        );
     }
 
     Ok(())
@@ -501,7 +544,8 @@ pub fn run(config: Config) -> UnitResult {
         "add" => add(&config),
         "download" => {
             download(&config)?;
-            tag(&config)
+            tag(&config)?;
+            post_process(&config)
         }
         _ => Ok(()),
     }
