@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::io::{self, BufRead, BufReader, ErrorKind, Write};
 use std::path::PathBuf;
 use std::process::{self, Command, Stdio};
-use std::{env, fs};
 use url::Url;
 
 type ConfigResult = Result<Config, Box<dyn std::error::Error>>;
@@ -34,6 +34,7 @@ pub struct Config {
 
     // Tagging
     pub enable_tagging: bool,
+    pub yt_dlp_output_dir: Option<PathBuf>,
 }
 
 impl Config {
@@ -132,14 +133,20 @@ impl Config {
                 }
 
                 match parts[0].as_str() {
-                    "clear_input" => {
-                        self.clear_input = parts[1].parse::<bool>()?;
-                    }
                     "auto_scrape" => {
                         self.auto_scrape = parts[1].parse::<bool>()?;
                     }
+                    "clear_input" => {
+                        self.clear_input = parts[1].parse::<bool>()?;
+                    }
+                    "enable_tagging" => {
+                        self.enable_tagging = parts[1].parse::<bool>()?;
+                    }
                     "verbose" => {
                         self.verbose = parts[1].parse::<bool>()?;
+                    }
+                    "yt_dlp_output_dir" => {
+                        self.yt_dlp_output_dir = Some(PathBuf::from(parts[1].clone()));
                     }
                     _ => return Err(format!("Invalid config option: {}", parts[0]).into()),
                 }
@@ -147,11 +154,11 @@ impl Config {
         }
 
         // Override defaults with CLI options
-        if self.download_options.contains_key("clear_input") {
-            self.clear_input = *self.download_options.get("clear_input").unwrap();
-        }
         if self.download_options.contains_key("auto_scrape") {
             self.auto_scrape = *self.download_options.get("auto_scrape").unwrap();
+        }
+        if self.download_options.contains_key("clear_input") {
+            self.clear_input = *self.download_options.get("clear_input").unwrap();
         }
         if self.download_options.contains_key("verbose") {
             self.verbose = *self.download_options.get("verbose").unwrap();
@@ -198,6 +205,7 @@ impl Config {
             input_path,
             yt_dlp_conf_path,
             enable_tagging: false,
+            yt_dlp_output_dir: None,
         };
 
         match config.command.as_str() {
@@ -423,10 +431,8 @@ fn download(config: &Config) -> UnitResult {
     inputs.extend(scrape(&config, scrape_inputs)?);
     inputs.extend(urls.iter().map(|s| s.to_string()));
 
-    let total = inputs.len();
-
     if config.verbose {
-        println!("Downloading {} URLs:", total);
+        println!("Downloading {} URLs:", inputs.len());
         for input in &inputs {
             println!("  {}", input);
         }
@@ -470,10 +476,19 @@ fn download(config: &Config) -> UnitResult {
     Ok(())
 }
 
-fn tag(_config: &Config) -> UnitResult {
+fn tag(config: &Config) -> UnitResult {
+    if !config.enable_tagging {
+        return Ok(());
+    } else if config.yt_dlp_output_dir.is_none() {
+        return Err("The directory where yt-dlp downloads to is not known, set 'YT_DLP_OUTPUT_DIR' in 'LIBRARY/lib.conf'".into());
+    }
+
+    // yt_dlp_output_dir is appended to lib_path (if relative),
+    // otherwise it will replace it (absolute)
+    let wd = PathBuf::from(config.lib_path.clone()).join(config.yt_dlp_output_dir.clone().unwrap());
+
     // Find downloaded files
-    let cwd = env::current_dir()?;
-    for entry in fs::read_dir(cwd)? {
+    for entry in fs::read_dir(wd)? {
         let entry = entry?;
         println!("{}", entry.file_name().to_str().unwrap());
     }
@@ -486,10 +501,7 @@ pub fn run(config: Config) -> UnitResult {
         "add" => add(&config),
         "download" => {
             download(&config)?;
-            if config.enable_tagging {
-                tag(&config)?;
-            }
-            Ok(())
+            tag(&config)
         }
         _ => Ok(()),
     }
