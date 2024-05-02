@@ -247,9 +247,7 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
             self.yt_dlp_conf_path.to_str().unwrap()
         );
 
-            let mut input = String::new();
-            io::stdin().read_line(&mut input)?;
-            input = input.trim().to_lowercase();
+            let input = input()?;
             if input.is_empty() || input.starts_with('n') {
                 return Ok(None);
             }
@@ -313,18 +311,20 @@ fn scrape_page(
             println!("  {}. {} | {}", i + 1, title, url);
         }
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input).unwrap();
-
-        let index = input.trim().to_string().parse::<usize>();
-        if let Ok(index) = index {
-            if index > 0 && index <= results.len() {
-                break index - 1;
-            }
+        let index = input()?.parse::<usize>();
+        if index.as_ref().is_ok_and(|i| *i > 0 && *i <= results.len()) {
+            break index.unwrap() - 1;
         }
+
         println!("Invalid input, please try again");
     };
     Ok(Some(results.get(selected).unwrap().1.clone()))
+}
+
+fn input() -> Result<String, Box<dyn Error>> {
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    Ok(input.trim().to_lowercase())
 }
 
 /// Returns a list of URLs, one per input query
