@@ -177,11 +177,6 @@ impl Config {
         let mut yt_dlp_conf_path = lib_path.join("yt-dlp");
         yt_dlp_conf_path.set_extension("conf");
 
-        println!("Using library path: {:?}", lib_path);
-        println!("Using input path  : {:?}", input_path);
-        println!("Using config path : {:?}", lib_conf_path);
-        println!("Using yt-dlp path : {:?}", yt_dlp_conf_path);
-
         let mut config = Config {
             command,
             library,

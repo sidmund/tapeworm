@@ -46,13 +46,18 @@ The behavior of the `download` command and subsequent processing is determined b
 
 ### Configuration
 
-When using a library, tapeworm will look for the following files in `~/.config/tapeworm/LIBRARY/`:
+When using a library, tapeworm will try to find the library folder at:
+
+- Unix: `/home/USER/.config/tapeworm/LIBRARY/`
+- Windows: `/c/Users/USER/AppData/Roaming/tapeworm/LIBRARY/`
+
+It will look for the following files:
 
 - **lib.conf**: library settings
 - **input.txt**: search queries and/or URLs
 - **yt-dlp.conf**: yt-dlp options
 
-Removing the `~/.config/tapeworm/LIBRARY` folder is all that is needed to remove the library. **Caution:** if you also downloaded files here, you might not want to delete those.
+Removing the `tapeworm/LIBRARY` folder is all that is needed to remove the library. **Caution:** if you also downloaded files here, you might not want to delete those.
 
 #### lib.conf
 
