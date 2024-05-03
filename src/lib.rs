@@ -12,6 +12,7 @@ type StringResult = Result<String, Box<dyn std::error::Error>>;
 type StringOptionResult = Result<Option<String>, Box<dyn std::error::Error>>;
 type StringVecResult = Result<Vec<String>, Box<dyn std::error::Error>>;
 
+#[derive(Default)]
 pub struct Config {
     pub command: String,
     pub library: String,
@@ -182,21 +183,14 @@ impl Config {
         println!("Using config path : {:?}", lib_conf_path);
         println!("Using yt-dlp path : {:?}", yt_dlp_conf_path);
 
-        // Setup defaults
         let mut config = Config {
             command,
             library,
-            terms: None,
-            clear_input: false,
-            auto_scrape: false,
-            verbose: false,
             lib_path,
             lib_conf_path,
             input_path,
             yt_dlp_conf_path,
-            target_dir: None,
-            enable_tagging: false,
-            yt_dlp_output_dir: None,
+            ..Default::default()
         };
 
         match config.command.as_str() {
@@ -475,12 +469,14 @@ fn tag(config: &Config) -> UnitResult {
         return Err("'YT_DLP_OUTPUT_DIR' must be set when tagging is enabled. See 'help'".into());
     }
 
-    // yt_dlp_output_dir is appended to lib_path (if relative),
-    // otherwise it will replace it (absolute)
     let downloads =
         PathBuf::from(config.lib_path.clone()).join(config.yt_dlp_output_dir.clone().unwrap());
     for entry in fs::read_dir(downloads)? {
         let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            continue;
+        }
+
         println!("{}", entry.file_name().to_str().unwrap());
     }
 
