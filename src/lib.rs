@@ -104,6 +104,10 @@ impl Config {
             .collect();
 
         for line in options {
+			if line.starts_with("#") {
+				continue;
+			}
+
             let option = line.split_once("=");
             if option.is_none() {
                 return Err(format!("Invalid config line: {}", line).into());
