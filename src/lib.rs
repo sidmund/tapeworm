@@ -1,3 +1,25 @@
+// TODO
+// Videos that ERROR are currently ignored (whether -i is specified or not),
+// and will be cleared along with the rest when done
+
+// TODO
+// Idea: should we add support for a tapeworm/lib.conf and tapeworm/yt-dlp.conf 
+// which contain settings that apply to any library?
+// Settings in individual libs will override these?
+// Doing this for lib.conf is easy, but yt-dlp? They already support supplying multiple configs, 
+// i dont know how they determine what takes action, but i feel like we can use that feature
+
+// TODO Tagging
+// could put this in a config file for adding parts that can be removed from filename:
+// Ending parts: (Official Music Video), Official Music Video, (HD), (HQ), HD, HQ, M/V, [MUSIC VIDEO]
+// Then propose the filename change to the user for confirmation, only after that, 
+// change filename, user can also manually adjust it
+
+// Also for myself: consider if keeping songs in A-Z/ARTIST folders is rly needed,
+// we only rly need folders for albums (cuz of the cover image)
+// With a music application and good searching apps, we dont rly need to put songs in their own folders?
+// I say this partly because then we dont need to split on multiple artists and make arbitrary decisions
+
 use std::collections::HashSet;
 use std::fs;
 use std::io::{self, BufRead, BufReader, ErrorKind, Write};
