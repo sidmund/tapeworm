@@ -10,7 +10,6 @@ type UnitResult = Result<(), Box<dyn std::error::Error>>;
 type BoolResult = Result<Option<bool>, Box<dyn std::error::Error>>;
 type StringResult = Result<String, Box<dyn std::error::Error>>;
 type StringOptionResult = Result<Option<String>, Box<dyn std::error::Error>>;
-type StringVecResult = Result<Vec<String>, Box<dyn std::error::Error>>;
 
 #[derive(Default)]
 pub struct Config {
@@ -244,30 +243,35 @@ EXAMPLE
         );
     }
 
+    /// Returns:
+    /// - Some(true) if yt-dlp.conf exists, it will be used
+    /// - Some(false) if the user wants to continue without yt-dlp.conf
+    /// - None if the user wants to abort
     fn yt_dlp_conf_exists(&self) -> BoolResult {
-        if fs::metadata(&self.yt_dlp_conf_path).is_err() {
-            println!(
+        if fs::metadata(&self.yt_dlp_conf_path).is_ok() {
+            return Ok(Some(true));
+        }
+
+        println!(
             "Warning: {} not found
 If you continue, yt-dlp will be invoked without any options, which will yield inconsistent results. Do you want to continue regardless? y/N",
             self.yt_dlp_conf_path.to_str().unwrap()
         );
 
-            let input = input()?;
-            if input.is_empty() || input.starts_with('n') {
-                return Ok(None);
-            }
-
-            Ok(Some(false))
+        let input = input()?;
+        if input.is_empty() || input.starts_with('n') {
+            Ok(None)
         } else {
-            Ok(Some(true))
+            Ok(Some(false))
         }
     }
 }
 
+// When auto_scrape is enabled, the first found URL will be returned
 fn scrape_page(config: &Config, tab: &headless_chrome::Tab, page: String) -> StringOptionResult {
     tab.navigate_to(page.as_str())?;
 
-    let mut results = Vec::new();
+    let mut results: Vec<(String, String)> = Vec::new();
     for result_html in tab.wait_for_elements(".title-and-badge")? {
         let attributes = result_html
             .wait_for_element("a")?
@@ -279,8 +283,7 @@ fn scrape_page(config: &Config, tab: &headless_chrome::Tab, page: String) -> Str
         }
 
         let title = attributes.get(7).unwrap().clone();
-        // Format: /watch?v=VIDEO_ID&OTHER_ARGS
-        let rel_url = attributes.get(9).unwrap();
+        let rel_url = attributes.get(9).unwrap(); // /watch?v=VIDEO_ID&OTHER_ARGS
         let url = format!(
             "https://www.youtube.com{}",
             rel_url.split("&").next().unwrap()
@@ -288,7 +291,6 @@ fn scrape_page(config: &Config, tab: &headless_chrome::Tab, page: String) -> Str
 
         results.push((title, url));
         if config.auto_scrape {
-            // Assume the first url is the best matched one
             break;
         }
     }
@@ -299,24 +301,20 @@ fn scrape_page(config: &Config, tab: &headless_chrome::Tab, page: String) -> Str
     }
 
     if config.auto_scrape {
-        // Assume the first url is the best matched one
         let url = results.get(0).unwrap().1.clone();
         println!("Found: {}", url);
         return Ok(Some(url));
     }
 
-    // Prompt user to select a result
     let selected = loop {
         println!("Select a result:");
-        for (i, (title, url)) in results.iter().enumerate() {
+        results.iter().enumerate().for_each(|(i, (title, url))| {
             println!("  {}. {} | {}", i + 1, title, url);
-        }
-
+        });
         let index = input()?.parse::<usize>();
         if index.as_ref().is_ok_and(|i| *i > 0 && *i <= results.len()) {
             break index.unwrap() - 1;
         }
-
         println!("Invalid input, please try again");
     };
     Ok(Some(results.get(selected).unwrap().1.clone()))
@@ -326,36 +324,6 @@ fn input() -> StringResult {
     let mut input = String::new();
     io::stdin().read_line(&mut input)?;
     Ok(input.trim().to_lowercase())
-}
-
-/// Returns a list of URLs, one per input query
-fn scrape(config: &Config, queries: Vec<String>) -> StringVecResult {
-    if queries.is_empty() {
-        return Ok(queries);
-    }
-
-    let queries: Vec<String> = queries
-        .iter()
-        .map(|line| line.replace(" ", "+").to_string())
-        .collect();
-    let total = queries.len();
-
-    let browser = headless_chrome::Browser::default().unwrap();
-    let tab = browser.new_tab().unwrap();
-
-    let mut urls = Vec::new();
-
-    for (i, query) in queries.iter().enumerate() {
-        let query = format!("https://www.youtube.com/results?search_query={}", query);
-        println!("Scraping {} of {}: {} ...", i + 1, total, query);
-
-        let url = scrape_page(&config, &tab, query)?;
-        if let Some(url) = url {
-            urls.push(url);
-        } // skip None
-    }
-
-    Ok(urls)
 }
 
 /// Attempts to append all terms to the input file.
@@ -410,45 +378,50 @@ fn download(config: &Config) -> UnitResult {
 
     let (urls, queries): (Vec<_>, Vec<_>) = inputs.iter().partition(|s| Url::parse(s).is_ok());
 
-    let scrape_inputs = queries.iter().map(|s| s.to_string()).collect();
-
     // Only keep unique URLs
     let mut inputs: HashSet<String> = HashSet::new();
-    inputs.extend(scrape(&config, scrape_inputs)?);
     inputs.extend(urls.iter().map(|s| s.to_string()));
+
+    let total = queries.len();
+    if total > 0 {
+        let browser = headless_chrome::Browser::default().unwrap();
+        let tab = browser.new_tab().unwrap();
+
+        for (i, query) in queries.iter().enumerate() {
+            let query = format!(
+                "https://www.youtube.com/results?search_query={}",
+                query.replace(" ", "+")
+            );
+            println!("Scraping {} of {}: {} ...", i + 1, total, query);
+
+            let url = scrape_page(&config, &tab, query)?;
+            if let Some(url) = url {
+                inputs.insert(url);
+            } // skip None
+        }
+    }
 
     if config.verbose {
         println!("Downloading {} URLs:", inputs.len());
-        for input in &inputs {
-            println!("  {}", input);
-        }
+        inputs.iter().for_each(|s| println!("  {}", s));
     }
 
     let inputs: Vec<String> = inputs.iter().map(|s| s.to_owned()).collect();
     let inputs = inputs.join(" ");
 
     // Download with yt-dlp
-    let stdout = if use_yt_dlp_conf {
-        Command::new("yt-dlp")
+    let mut command = Command::new("yt-dlp");
+    if use_yt_dlp_conf {
+        command
             .arg("--config-location")
-            .arg(&config.yt_dlp_conf_path)
-            .arg(inputs)
-            .stdout(Stdio::piped())
-            .spawn()?
-            .stdout
-            .ok_or_else(|| {
-                std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
-            })?
-    } else {
-        Command::new("yt-dlp")
-            .arg(inputs)
-            .stdout(Stdio::piped())
-            .spawn()?
-            .stdout
-            .ok_or_else(|| {
-                std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
-            })?
-    };
+            .arg(&config.yt_dlp_conf_path);
+    }
+    command.arg(inputs).stdout(Stdio::piped());
+
+    let stdout = command.spawn()?.stdout.ok_or_else(|| {
+        std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
+    })?;
+
     let reader = BufReader::new(stdout);
     reader
         .lines()
