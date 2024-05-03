@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::io::{self, BufRead, BufReader, ErrorKind, Write};
 use std::path::PathBuf;
@@ -19,9 +19,7 @@ pub struct Config {
     // Add
     pub terms: Option<Vec<String>>, // TERM... | URL...
 
-    // CLI download options
-    pub download_options: HashMap<String, bool>,
-    // Runtime download options
+    // Download options
     pub clear_input: bool,
     pub auto_scrape: bool,
     pub verbose: bool,
@@ -94,78 +92,67 @@ impl Config {
         Ok(())
     }
 
-    fn parse_options(&mut self, mut args: impl Iterator<Item = String>) -> UnitResult {
-        while let Some(arg) = args.next() {
-            // No (more) options
-            if !arg.starts_with('-') {
-                break;
+    /// Override default options with options from lib.conf
+    fn parse_lib_conf_options(&mut self) -> UnitResult {
+        if fs::metadata(&self.lib_conf_path).is_err() {
+            return Ok(()); // Leave defaults if lib.conf doesn't exist
+        }
+
+        let options: Vec<String> = fs::read_to_string(&self.lib_conf_path)?
+            .lines()
+            .map(|line| line.trim().to_string())
+            .collect();
+
+        for line in options {
+            let option = line.split_once("=");
+            if option.is_none() {
+                return Err(format!("Invalid config line: {}", line).into());
             }
 
-            // Support combined options, e.g. -vy
-            for s in arg[1..].chars() {
-                match s {
-                    'c' => self
-                        .download_options
-                        .insert(String::from("clear_input"), true),
-                    'y' => self
-                        .download_options
-                        .insert(String::from("auto_scrape"), true),
-                    'v' => self.download_options.insert(String::from("verbose"), true),
-                    _ => return Err("Unrecognized option. See 'help'".into()),
-                };
+            let (key, value) = option.unwrap();
+            match key.to_lowercase().as_str() {
+                "auto_scrape" => {
+                    self.auto_scrape = value.parse::<bool>()?;
+                }
+                "clear_input" => {
+                    self.clear_input = value.parse::<bool>()?;
+                }
+                "enable_tagging" => {
+                    self.enable_tagging = value.parse::<bool>()?;
+                }
+                "target_dir" => {
+                    self.target_dir = Some(PathBuf::from(value));
+                }
+                "verbose" => {
+                    self.verbose = value.parse::<bool>()?;
+                }
+                "yt_dlp_output_dir" => {
+                    self.yt_dlp_output_dir = Some(PathBuf::from(value));
+                }
+                _ => {
+                    return Err(format!("Unrecognized config option: {}", key).into());
+                }
             }
         }
 
         Ok(())
     }
 
-    fn get_download_options(&mut self) -> UnitResult {
-        if fs::metadata(&self.lib_conf_path).is_ok() {
-            // Override defaults with config file
-            let lib_conf = fs::read_to_string(&self.lib_conf_path)?;
-            let options: Vec<String> = lib_conf
-                .lines()
-                .map(|line| line.trim().to_string())
-                .collect();
-            for line in options {
-                let parts: Vec<String> = line.split("=").map(|s| s.to_string()).collect();
-                if parts.len() != 2 {
-                    return Err(format!("Invalid config line: {}", line).into());
-                }
-
-                match parts[0].to_lowercase().as_str() {
-                    "auto_scrape" => {
-                        self.auto_scrape = parts[1].parse::<bool>()?;
-                    }
-                    "clear_input" => {
-                        self.clear_input = parts[1].parse::<bool>()?;
-                    }
-                    "enable_tagging" => {
-                        self.enable_tagging = parts[1].parse::<bool>()?;
-                    }
-                    "target_dir" => {
-                        self.target_dir = Some(PathBuf::from(parts[1].clone()));
-                    }
-                    "verbose" => {
-                        self.verbose = parts[1].parse::<bool>()?;
-                    }
-                    "yt_dlp_output_dir" => {
-                        self.yt_dlp_output_dir = Some(PathBuf::from(parts[1].clone()));
-                    }
-                    _ => return Err(format!("Invalid config option: {}", parts[0]).into()),
-                }
+    /// Override default options with CLI options
+    fn parse_cli_options(&mut self, mut args: impl Iterator<Item = String>) -> UnitResult {
+        while let Some(arg) = args.next() {
+            if !arg.starts_with('-') {
+                break; // no (more) options
             }
-        }
 
-        // Override defaults with CLI options
-        if self.download_options.contains_key("auto_scrape") {
-            self.auto_scrape = *self.download_options.get("auto_scrape").unwrap();
-        }
-        if self.download_options.contains_key("clear_input") {
-            self.clear_input = *self.download_options.get("clear_input").unwrap();
-        }
-        if self.download_options.contains_key("verbose") {
-            self.verbose = *self.download_options.get("verbose").unwrap();
+            for s in arg[1..].chars() {
+                match s {
+                    'c' => self.clear_input = true,
+                    'y' => self.auto_scrape = true,
+                    'v' => self.verbose = true,
+                    _ => return Err("Unrecognized option. See 'help'".into()),
+                };
+            }
         }
 
         Ok(())
@@ -200,7 +187,6 @@ impl Config {
             command,
             library,
             terms: None,
-            download_options: HashMap::new(),
             clear_input: false,
             auto_scrape: false,
             verbose: false,
@@ -216,8 +202,9 @@ impl Config {
         match config.command.as_str() {
             "add" => config.parse_terms(args)?,
             "download" => {
-                config.parse_options(args)?;
-                config.get_download_options()?;
+                // Override defaults with lib.conf, then with CLI options
+                config.parse_lib_conf_options()?;
+                config.parse_cli_options(args)?;
             }
             _ => return Err("Unrecognized command. See 'help'".into()),
         };
