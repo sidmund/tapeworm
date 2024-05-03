@@ -401,9 +401,6 @@ fn download(config: &Config) -> UnitResult {
         inputs.iter().for_each(|s| println!("  {}", s));
     }
 
-    let inputs: Vec<String> = inputs.iter().map(|s| s.to_owned()).collect();
-    let inputs = inputs.join(" ");
-
     // Download with yt-dlp
     let mut command = Command::new("yt-dlp");
     if use_yt_dlp_conf {
@@ -411,7 +408,10 @@ fn download(config: &Config) -> UnitResult {
             .arg("--config-location")
             .arg(&config.yt_dlp_conf_path);
     }
-    command.arg(inputs).stdout(Stdio::piped());
+	for input in inputs {
+		command.arg(input);
+	}
+    command.stdout(Stdio::piped());
 
     let stdout = command.spawn()?.stdout.ok_or_else(|| {
         std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
