@@ -8,4 +8,5 @@ edition = "2021"
 [dependencies]
 dirs = "5.0.1"
 headless_chrome = "1.0.9"
+regex = "1.10.4"
 url = "2.5.0"

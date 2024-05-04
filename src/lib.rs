@@ -1,3 +1,4 @@
+mod tag;
 mod util;
 
 use std::collections::HashSet;
@@ -412,27 +413,6 @@ fn download(config: &Config) -> UnitResult {
     Ok(())
 }
 
-fn tag(config: &Config) -> UnitResult {
-    if !config.enable_tagging {
-        return Ok(());
-    } else if config.yt_dlp_output_dir.is_none() {
-        return Err("'YT_DLP_OUTPUT_DIR' must be set when tagging is enabled. See 'help'".into());
-    }
-
-    let downloads =
-        PathBuf::from(config.lib_path.clone()).join(config.yt_dlp_output_dir.clone().unwrap());
-    for entry in fs::read_dir(downloads)? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            continue;
-        }
-
-        println!("{}", entry.file_name().to_str().unwrap());
-    }
-
-    Ok(())
-}
-
 /// Attempt to move all downloaded (and processed) files in YT_DLP_OUTPUT_DIR to TARGET_DIR.
 /// TARGET_DIR is created if not present.
 /// Directories are not moved, only files.
@@ -477,7 +457,7 @@ pub fn run(config: Config) -> UnitResult {
         "add" => add(&config),
         "download" => {
             download(&config)?;
-            tag(&config)?;
+            tag::tag(&config)?;
             post_process(&config)
         }
         _ => Ok(()),
