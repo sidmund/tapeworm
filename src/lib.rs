@@ -3,16 +3,16 @@
 // and will be cleared along with the rest when done
 
 // TODO
-// Idea: should we add support for a tapeworm/lib.conf and tapeworm/yt-dlp.conf 
+// Idea: should we add support for a tapeworm/lib.conf and tapeworm/yt-dlp.conf
 // which contain settings that apply to any library?
 // Settings in individual libs will override these?
-// Doing this for lib.conf is easy, but yt-dlp? They already support supplying multiple configs, 
+// Doing this for lib.conf is easy, but yt-dlp? They already support supplying multiple configs,
 // i dont know how they determine what takes action, but i feel like we can use that feature
 
 // TODO Tagging
 // could put this in a config file for adding parts that can be removed from filename:
 // Ending parts: (Official Music Video), Official Music Video, (HD), (HQ), HD, HQ, M/V, [MUSIC VIDEO]
-// Then propose the filename change to the user for confirmation, only after that, 
+// Then propose the filename change to the user for confirmation, only after that,
 // change filename, user can also manually adjust it
 
 // Also for myself: consider if keeping songs in A-Z/ARTIST folders is rly needed,
@@ -126,9 +126,9 @@ impl Config {
             .collect();
 
         for line in options {
-			if line.starts_with("#") {
-				continue;
-			}
+            if line.starts_with("#") {
+                continue;
+            }
 
             let option = line.split_once("=");
             if option.is_none() {
@@ -137,27 +137,13 @@ impl Config {
 
             let (key, value) = option.unwrap();
             match key.to_lowercase().as_str() {
-                "auto_scrape" => {
-                    self.auto_scrape = value.parse::<bool>()?;
-                }
-                "clear_input" => {
-                    self.clear_input = value.parse::<bool>()?;
-                }
-                "enable_tagging" => {
-                    self.enable_tagging = value.parse::<bool>()?;
-                }
-                "target_dir" => {
-                    self.target_dir = Some(PathBuf::from(value));
-                }
-                "verbose" => {
-                    self.verbose = value.parse::<bool>()?;
-                }
-                "yt_dlp_output_dir" => {
-                    self.yt_dlp_output_dir = Some(PathBuf::from(value));
-                }
-                _ => {
-                    return Err(format!("Unrecognized config option: {}", key).into());
-                }
+                "auto_scrape" => self.auto_scrape = value.parse::<bool>()?,
+                "clear_input" => self.clear_input = value.parse::<bool>()?,
+                "enable_tagging" => self.enable_tagging = value.parse::<bool>()?,
+                "target_dir" => self.target_dir = Some(PathBuf::from(value)),
+                "verbose" => self.verbose = value.parse::<bool>()?,
+                "yt_dlp_output_dir" => self.yt_dlp_output_dir = Some(PathBuf::from(value)),
+                _ => return Err(format!("Unrecognized config option: {}", key).into()),
             }
         }
 
@@ -288,6 +274,12 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
     }
 }
 
+fn input() -> StringResult {
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+    Ok(input.trim().to_lowercase())
+}
+
 // When auto_scrape is enabled, the first found URL will be returned
 fn scrape_page(config: &Config, tab: &headless_chrome::Tab, page: String) -> StringOptionResult {
     tab.navigate_to(page.as_str())?;
@@ -341,12 +333,6 @@ fn scrape_page(config: &Config, tab: &headless_chrome::Tab, page: String) -> Str
     Ok(Some(results.get(selected).unwrap().1.clone()))
 }
 
-fn input() -> StringResult {
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    Ok(input.trim().to_lowercase())
-}
-
 /// Attempts to append all terms to the input file.
 /// The library folder and input file are created if they do not exist.
 fn add(config: &Config) -> UnitResult {
@@ -392,16 +378,13 @@ fn download(config: &Config) -> UnitResult {
         return Ok(());
     }
 
-    let inputs: Vec<String> = fs::read_to_string(config.input_path.clone())?
+    let (urls, queries): (Vec<_>, Vec<_>) = inputs
         .lines()
         .map(|s| s.to_string())
-        .collect();
+        .partition(|s| Url::parse(s).is_ok());
 
-    let (urls, queries): (Vec<_>, Vec<_>) = inputs.iter().partition(|s| Url::parse(s).is_ok());
-
-    // Only keep unique URLs
     let mut inputs: HashSet<String> = HashSet::new();
-    inputs.extend(urls.iter().map(|s| s.to_string()));
+    inputs.extend(urls); // only keep unique URLs
 
     let total = queries.len();
     if total > 0 {
@@ -434,17 +417,16 @@ fn download(config: &Config) -> UnitResult {
             .arg("--config-location")
             .arg(&config.yt_dlp_conf_path);
     }
-	for input in inputs {
-		command.arg(input);
-	}
+    inputs.iter().for_each(|input| {
+        command.arg(input);
+    });
     command.stdout(Stdio::piped());
 
     let stdout = command.spawn()?.stdout.ok_or_else(|| {
         std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
     })?;
 
-    let reader = BufReader::new(stdout);
-    reader
+    BufReader::new(stdout)
         .lines()
         .filter_map(|line| line.ok())
         .for_each(|line| println!("{}", line));
