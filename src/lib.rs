@@ -13,11 +13,12 @@ type UnitResult = Result<(), Box<dyn std::error::Error>>;
 type BoolResult = Result<Option<bool>, Box<dyn std::error::Error>>;
 type StringResult = Result<String, Box<dyn std::error::Error>>;
 type StringOptionResult = Result<Option<String>, Box<dyn std::error::Error>>;
+type StringBoolResult = Result<(String, bool), Box<dyn std::error::Error>>;
 
 #[derive(Default)]
 pub struct Config {
     pub command: String,
-    pub library: String,
+    pub library: Option<String>,
 
     // Add
     pub terms: Option<Vec<String>>, // TERM... | URL...
@@ -28,10 +29,10 @@ pub struct Config {
     pub verbose: bool,
 
     // Paths
-    pub lib_path: PathBuf,
-    pub lib_conf_path: PathBuf,
-    pub input_path: PathBuf,
-    pub yt_dlp_conf_path: PathBuf,
+    pub lib_path: Option<PathBuf>,
+    pub lib_conf_path: Option<PathBuf>,
+    pub input_path: Option<PathBuf>,
+    pub yt_dlp_conf_path: Option<PathBuf>,
     pub target_dir: Option<PathBuf>,
 
     // Tagging
@@ -40,14 +41,17 @@ pub struct Config {
 }
 
 impl Config {
-    fn parse_command(command: Option<String>) -> StringResult {
+    fn parse_command(command: Option<String>) -> StringBoolResult {
         if let Some(command) = command {
             return match command.as_str() {
                 "help" | "h" | "-h" | "--help" => {
                     Config::help();
                     process::exit(0);
                 }
-                "add" | "download" => Ok(command),
+                // Commands that require a library
+                "add" | "download" => Ok((command, true)),
+                // Commands that don't require a library
+                "list" => Ok((command, false)),
                 _ => Err("Unrecognized command. See 'help'".into()),
             };
         }
@@ -97,11 +101,11 @@ impl Config {
 
     /// Override default options with options from lib.conf
     fn parse_lib_conf_options(&mut self) -> UnitResult {
-        if fs::metadata(&self.lib_conf_path).is_err() {
+        if fs::metadata(&self.lib_conf_path.clone().unwrap()).is_err() {
             return Ok(()); // Leave defaults if lib.conf doesn't exist
         }
 
-        let options: Vec<String> = fs::read_to_string(&self.lib_conf_path)?
+        let options: Vec<String> = fs::read_to_string(&self.lib_conf_path.clone().unwrap())?
             .lines()
             .map(|line| line.trim().to_string())
             .collect();
@@ -154,30 +158,38 @@ impl Config {
     pub fn build(mut args: impl Iterator<Item = String>) -> ConfigResult {
         args.next(); // Consume program name
 
-        let command = Config::parse_command(args.next())?;
-        let library = Config::parse_library(args.next())?;
+        let (command, require_library) = Config::parse_command(args.next())?;
 
-        let lib_path = PathBuf::from(dirs::config_dir().unwrap())
-            .join("tapeworm")
-            .join(library.clone());
+        let mut config = if require_library {
+            let library = Config::parse_library(args.next())?;
 
-        let mut lib_conf_path = lib_path.join("lib");
-        lib_conf_path.set_extension("conf");
+            let lib_path = PathBuf::from(dirs::config_dir().unwrap())
+                .join("tapeworm")
+                .join(library.clone());
 
-        let mut input_path = lib_path.join("input");
-        input_path.set_extension("txt");
+            let mut lib_conf_path = lib_path.join("lib");
+            lib_conf_path.set_extension("conf");
 
-        let mut yt_dlp_conf_path = lib_path.join("yt-dlp");
-        yt_dlp_conf_path.set_extension("conf");
+            let mut input_path = lib_path.join("input");
+            input_path.set_extension("txt");
 
-        let mut config = Config {
-            command,
-            library,
-            lib_path,
-            lib_conf_path,
-            input_path,
-            yt_dlp_conf_path,
-            ..Default::default()
+            let mut yt_dlp_conf_path = lib_path.join("yt-dlp");
+            yt_dlp_conf_path.set_extension("conf");
+
+            Config {
+                command,
+                library: Some(library),
+                lib_path: Some(lib_path),
+                lib_conf_path: Some(lib_conf_path),
+                input_path: Some(input_path),
+                yt_dlp_conf_path: Some(yt_dlp_conf_path),
+                ..Default::default()
+            }
+        } else {
+            Config {
+                command,
+                ..Default::default()
+            }
         };
 
         match config.command.as_str() {
@@ -187,6 +199,7 @@ impl Config {
                 config.parse_lib_conf_options()?;
                 config.parse_cli_options(args)?;
             }
+            "list" => {}
             _ => return Err("Unrecognized command. See 'help'".into()),
         };
 
@@ -236,14 +249,14 @@ EXAMPLE
     /// - Some(false) if the user wants to continue without yt-dlp.conf
     /// - None if the user wants to abort
     fn yt_dlp_conf_exists(&self) -> BoolResult {
-        if fs::metadata(&self.yt_dlp_conf_path).is_ok() {
+        if fs::metadata(&self.yt_dlp_conf_path.clone().unwrap()).is_ok() {
             return Ok(Some(true));
         }
 
         println!(
             "Warning: {} not found
 If you continue, yt-dlp will be invoked without any options, which will yield inconsistent results. Do you want to continue regardless? y/N",
-            self.yt_dlp_conf_path.to_str().unwrap()
+            self.yt_dlp_conf_path.clone().unwrap().to_str().unwrap()
         );
 
         let input = util::input()?;
@@ -311,14 +324,14 @@ fn scrape_page(config: &Config, tab: &headless_chrome::Tab, page: String) -> Str
 /// Attempts to append all terms to the input file.
 /// The library folder and input file are created if they do not exist.
 fn add(config: &Config) -> UnitResult {
-    if fs::metadata(&config.lib_path).is_err() {
-        fs::create_dir_all(&config.lib_path)?;
+    if fs::metadata(&config.lib_path.clone().unwrap()).is_err() {
+        fs::create_dir_all(&config.lib_path.clone().unwrap())?;
     }
 
     let mut input_file = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(&config.input_path)?;
+        .open(&config.input_path.clone().unwrap())?;
 
     let contents = format!("{}\n", config.terms.as_ref().unwrap().join("\n"));
     input_file.write_all(contents.as_bytes())?;
@@ -327,8 +340,12 @@ fn add(config: &Config) -> UnitResult {
 }
 
 fn download(config: &Config) -> UnitResult {
-    if fs::metadata(&config.lib_path).is_err() {
-        return Err(format!("Library not found: {}", config.lib_path.to_str().unwrap()).into());
+    if fs::metadata(&config.lib_path.clone().unwrap()).is_err() {
+        return Err(format!(
+            "Library not found: {}",
+            config.lib_path.clone().unwrap().to_str().unwrap()
+        )
+        .into());
     }
 
     let use_yt_dlp_conf = if let Some(value) = config.yt_dlp_conf_exists()? {
@@ -337,15 +354,15 @@ fn download(config: &Config) -> UnitResult {
         return Ok(()); // User wants to abort when config is not found
     };
 
-    if fs::metadata(&config.input_path).is_err() {
+    if fs::metadata(&config.input_path.clone().unwrap()).is_err() {
         return Err(format!(
             "Input file not found: {}",
-            config.input_path.to_str().unwrap()
+            config.input_path.clone().unwrap().to_str().unwrap()
         )
         .into());
     }
 
-    let inputs = fs::read_to_string(&config.input_path)?;
+    let inputs = fs::read_to_string(&config.input_path.clone().unwrap())?;
     if inputs.is_empty() {
         if config.verbose {
             println!("Nothing to download. Library is empty.");
@@ -390,7 +407,7 @@ fn download(config: &Config) -> UnitResult {
     if use_yt_dlp_conf {
         command
             .arg("--config-location")
-            .arg(&config.yt_dlp_conf_path);
+            .arg(&config.yt_dlp_conf_path.clone().unwrap());
     }
     inputs.iter().for_each(|input| {
         command.arg(input);
@@ -407,7 +424,21 @@ fn download(config: &Config) -> UnitResult {
         .for_each(|line| println!("{}", line));
 
     if config.clear_input {
-        fs::write(&config.input_path, "")?;
+        fs::write(&config.input_path.clone().unwrap(), "")?;
+    }
+
+    Ok(())
+}
+
+fn list() -> UnitResult {
+    let conf_path = PathBuf::from(dirs::config_dir().unwrap()).join("tapeworm");
+    if let Ok(libraries) = fs::read_dir(&conf_path) {
+        for library in libraries {
+            let library = library?;
+            if library.file_type()?.is_dir() {
+                println!("{}", library.file_name().to_str().unwrap());
+            }
+        }
     }
 
     Ok(())
@@ -428,13 +459,13 @@ fn post_process(config: &Config) -> UnitResult {
     }
 
     let target_dir =
-        PathBuf::from(config.lib_path.clone()).join(config.target_dir.clone().unwrap());
+        PathBuf::from(config.lib_path.clone().unwrap()).join(config.target_dir.clone().unwrap());
     if fs::metadata(&target_dir).is_err() {
         fs::create_dir_all(&target_dir)?;
     }
 
-    let downloads =
-        PathBuf::from(config.lib_path.clone()).join(config.yt_dlp_output_dir.clone().unwrap());
+    let downloads = PathBuf::from(config.lib_path.clone().unwrap())
+        .join(config.yt_dlp_output_dir.clone().unwrap());
     for entry in fs::read_dir(downloads)? {
         let entry = entry?;
         if entry.file_type()?.is_dir() {
@@ -460,6 +491,7 @@ pub fn run(config: Config) -> UnitResult {
             tag::tag(&config)?;
             post_process(&config)
         }
+        "list" => list(),
         _ => Ok(()),
     }
 }

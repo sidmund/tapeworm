@@ -13,8 +13,8 @@ pub fn tag(config: &Config) -> UnitResult {
         return Err("'YT_DLP_OUTPUT_DIR' must be set when tagging is enabled. See 'help'".into());
     }
 
-    let downloads =
-        PathBuf::from(config.lib_path.clone()).join(config.yt_dlp_output_dir.clone().unwrap());
+    let downloads = PathBuf::from(config.lib_path.clone().unwrap())
+        .join(config.yt_dlp_output_dir.clone().unwrap());
     for entry in fs::read_dir(downloads)? {
         let entry = entry?;
         if entry.file_type()?.is_dir() {
