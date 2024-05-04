@@ -1,6 +1,8 @@
+mod util;
+
 use std::collections::HashSet;
 use std::fs;
-use std::io::{self, BufRead, BufReader, ErrorKind, Write};
+use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::path::PathBuf;
 use std::process::{self, Command, Stdio};
 use url::Url;
@@ -243,19 +245,13 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
             self.yt_dlp_conf_path.to_str().unwrap()
         );
 
-        let input = input()?;
+        let input = util::input()?;
         if input.is_empty() || input.starts_with('n') {
             Ok(None)
         } else {
             Ok(Some(false))
         }
     }
-}
-
-fn input() -> StringResult {
-    let mut input = String::new();
-    io::stdin().read_line(&mut input)?;
-    Ok(input.trim().to_lowercase())
 }
 
 // When auto_scrape is enabled, the first found URL will be returned
@@ -302,7 +298,7 @@ fn scrape_page(config: &Config, tab: &headless_chrome::Tab, page: String) -> Str
         results.iter().enumerate().for_each(|(i, (title, url))| {
             println!("  {}. {} | {}", i + 1, title, url);
         });
-        let index = input()?.parse::<usize>();
+        let index = util::input()?.parse::<usize>();
         if index.as_ref().is_ok_and(|i| *i > 0 && *i <= results.len()) {
             break index.unwrap() - 1;
         }
