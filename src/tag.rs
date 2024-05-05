@@ -1,3 +1,14 @@
+// -o "%(title)s.%(ext)s"
+// tag.rs currently expects exactly the above format. But we can do much more with yt-dlp output template options. We can set a whole log of options and just parse filename based on those, setting tags would be a lot easier, look into the options. Maybe yt-dlp also has tagging options? Check the docs.
+// It is fine to have a convoluted output filename, we can just set it to "Artist - Title" e.g. or smth useful for archiving after done processing.
+
+// For soundcloud urls like this, we can easily get the profile and track, im not sure if profile is necessarily the artist name, but we can fallback to it if the artist is not in the track title.
+// URLs for https://soundcloud.com/profile/track
+// webpage_url: https：⧸⧸soundcloud.com⧸profile/track (note the alt : as : cant be in filenames)
+// original_url: https：⧸⧸soundcloud.com⧸profile/track (same here)
+// webpage_url_basename: target
+// webpage_url_domain: soundcloud.com
+
 use crate::Config;
 use regex::Regex;
 use std::collections::HashMap;
@@ -50,7 +61,7 @@ fn build_tags(filename: &str, verbose: bool) -> Option<HashMap<&str, String>> {
 
     let mut title = None;
 
-    for delim in "-_~|".chars() {
+    for delim in "-_~｜".chars() {
         if let Some((author, full_title)) = filename.split_once(delim) {
             let author = Regex::new(r"(featuring|feat\.?|ft\.?|&|,)")
                 .unwrap()
