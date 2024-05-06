@@ -16,7 +16,7 @@ pub struct Config {
     pub library: Option<String>,
 
     // Add
-    pub terms: Option<Vec<String>>, // TERM... | URL...
+    pub terms: Option<Vec<String>>, // QUERY | URL...
 
     // Download options
     pub clear_input: bool,
@@ -345,14 +345,14 @@ fn download(config: &Config) -> types::UnitResult {
         return Ok(());
     }
 
-    let urls: HashSet<String> = inputs.lines().map(|s| s.to_string()).collect();
+    let inputs: HashSet<String> = inputs.lines().map(|s| s.to_string()).collect();
 
     if config.verbose {
-        println!("Downloading {} URLs:", urls.len());
-        urls.iter().for_each(|s| println!("  {}", s));
+        println!("Downloading {} URLs:", inputs.len());
+        inputs.iter().for_each(|s| println!("  {}", s));
     }
 
-    yt_dlp(&config, use_yt_dlp_conf, urls)?;
+    yt_dlp(&config, use_yt_dlp_conf, inputs)?;
 
     if config.clear_input {
         fs::write(&config.input_path.clone().unwrap(), "")?;
@@ -368,12 +368,10 @@ fn list() -> types::UnitResult {
         return Ok(()); // No need to fail when no libraries are present
     }
 
-    for library in libraries.unwrap() {
-        let library = library?;
-        if library.file_type()?.is_dir() {
-            println!("{}", library.file_name().to_str().unwrap());
-        }
-    }
+    libraries
+        .unwrap()
+        .filter(|l| l.is_ok_and(|l| l.file_type()?.is_dir()))
+        .for_each(|l| println!("{}", l.unwrap().file_name().to_str().unwrap()));
 
     Ok(())
 }
