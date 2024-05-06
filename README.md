@@ -17,7 +17,7 @@ If you just need to download URL(s), use yt-dlp. yt-dlp also has options for spe
 
 ## Build
 
-A Rust installation is required. tapeworm compiles with Rust 1.74.0 (stable).
+A Rust installation is required. tapeworm compiles with Rust 1.74.0+ (stable).
 
 To build tapeworm:
 ```sh
@@ -46,12 +46,12 @@ The behavior of the `download` command and subsequent processing is determined b
 
 ### Configuration
 
-When using a library, tapeworm will try to find the library folder at:
+The config directory shall refer to one of the following paths (depending on your system):
 
 - Unix: `/home/USER/.config/tapeworm/LIBRARY/`
 - Windows: `/c/Users/USER/AppData/Roaming/tapeworm/LIBRARY/`
 
-It will look for the following files:
+tapeworm will try to find the following files in this directory:
 
 - **lib.conf**: library settings
 - **input.txt**: search queries and/or URLs
@@ -68,7 +68,7 @@ This specifies library settings, in newline-separated `name=value` pairs. If thi
 | AUTO_SCRAPE | false | Manually select a URL, otherwise, use the first found URL |
 | CLEAR_INPUT | false | Clear input.txt after downloading |
 | ENABLE_TAGGING | false | Tag downloaded files. **Requires** `YT_DLP_OUTPUT_DIR` to be set. |
-| TARGET_DIR | | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to `~/.config/tapeworm/LIBRARY` or an absolute path. **Requires** `YT_DLP_OUTPUT_DIR` to be set. |
+| TARGET_DIR | | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `YT_DLP_OUTPUT_DIR` to be set. |
 | VERBOSE | false | Show verbose output |
 | YT_DLP_OUTPUT_DIR | | The folder where yt-dlp puts its downloads. Either a LIBRARY-relative path or an absolute path. Any file in this folder will be tagged, and possibly moved to `TARGET_DIR`. **Required** for `ENABLE_TAGGING` and `TARGET_DIR`. |
 
