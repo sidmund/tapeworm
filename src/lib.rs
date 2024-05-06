@@ -345,39 +345,14 @@ fn download(config: &Config) -> types::UnitResult {
         return Ok(());
     }
 
-    let (urls, queries): (Vec<_>, Vec<_>) = inputs
-        .lines()
-        .map(|s| s.to_string())
-        .partition(|s| Url::parse(s).is_ok());
-
-    let mut inputs: HashSet<String> = HashSet::new();
-    inputs.extend(urls); // only keep unique URLs
-
-    let total = queries.len();
-    if total > 0 {
-        let browser = headless_chrome::Browser::default().unwrap();
-        let tab = browser.new_tab().unwrap();
-
-        for (i, query) in queries.iter().enumerate() {
-            let query = format!(
-                "https://www.youtube.com/results?search_query={}",
-                query.replace(" ", "+")
-            );
-            println!("Scraping {} of {}: {} ...", i + 1, total, query);
-
-            let url = scrape::scrape_page(&config, &tab, query)?;
-            if let Some(url) = url {
-                inputs.insert(url);
-            } // skip None
-        }
-    }
+    let urls: HashSet<String> = inputs.lines().map(|s| s.to_string()).collect();
 
     if config.verbose {
-        println!("Downloading {} URLs:", inputs.len());
-        inputs.iter().for_each(|s| println!("  {}", s));
+        println!("Downloading {} URLs:", urls.len());
+        urls.iter().for_each(|s| println!("  {}", s));
     }
 
-    yt_dlp(&config, use_yt_dlp_conf, inputs)?;
+    yt_dlp(&config, use_yt_dlp_conf, urls)?;
 
     if config.clear_input {
         fs::write(&config.input_path.clone().unwrap(), "")?;

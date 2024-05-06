@@ -3,6 +3,7 @@ use crate::util;
 use crate::Config;
 
 // When auto_scrape is enabled, the first found URL will be returned
+#[allow(dead_code)]
 pub fn scrape_page(
     config: &Config,
     tab: &headless_chrome::Tab,
