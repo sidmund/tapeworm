@@ -88,7 +88,8 @@ impl Config {
                 terms.push(arg);
             }
             // Otherwise, add all terms as a single query
-            self.terms = Some(vec![terms.join(" ")]);
+            let query = format!("ytsearch:\"{}\"", terms.join(" "));
+            self.terms = Some(vec![query]);
         }
 
         Ok(())
