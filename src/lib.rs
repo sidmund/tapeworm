@@ -390,7 +390,7 @@ fn list() -> types::UnitResult {
 
     for library in libraries.unwrap() {
         let library = library?;
-        if !library.file_type()?.is_dir() {
+        if library.path().is_dir() {
             println!("{}", library.file_name().to_str().unwrap());
         }
     }
