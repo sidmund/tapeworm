@@ -1,14 +1,13 @@
+use crate::types;
 use crate::util;
 use crate::Config;
-
-type StringOptionResult = Result<Option<String>, Box<dyn std::error::Error>>;
 
 // When auto_scrape is enabled, the first found URL will be returned
 pub fn scrape_page(
     config: &Config,
     tab: &headless_chrome::Tab,
     page: String,
-) -> StringOptionResult {
+) -> types::StringOptionResult {
     tab.navigate_to(page.as_str())?;
 
     let mut results: Vec<(String, String)> = Vec::new();

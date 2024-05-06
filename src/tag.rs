@@ -9,15 +9,14 @@
 // webpage_url_basename: target
 // webpage_url_domain: soundcloud.com
 
+use crate::types;
 use crate::Config;
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
-type UnitResult = Result<(), Box<dyn std::error::Error>>;
-
-pub fn tag(config: &Config) -> UnitResult {
+pub fn tag(config: &Config) -> types::UnitResult {
     if !config.enable_tagging {
         return Ok(());
     } else if config.yt_dlp_output_dir.is_none() {

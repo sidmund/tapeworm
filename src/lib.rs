@@ -1,5 +1,6 @@
 mod scrape;
 mod tag;
+mod types;
 mod util;
 
 use std::collections::HashSet;
@@ -8,12 +9,6 @@ use std::io::{BufRead, BufReader, ErrorKind, Write};
 use std::path::PathBuf;
 use std::process::{self, Command, Stdio};
 use url::Url;
-
-type ConfigResult = Result<Config, Box<dyn std::error::Error>>;
-type UnitResult = Result<(), Box<dyn std::error::Error>>;
-type BoolResult = Result<Option<bool>, Box<dyn std::error::Error>>;
-type StringResult = Result<String, Box<dyn std::error::Error>>;
-type StringBoolResult = Result<(String, bool), Box<dyn std::error::Error>>;
 
 #[derive(Default)]
 pub struct Config {
@@ -41,7 +36,7 @@ pub struct Config {
 }
 
 impl Config {
-    fn parse_command(command: Option<String>) -> StringBoolResult {
+    fn parse_command(command: Option<String>) -> types::StringBoolResult {
         if let Some(command) = command {
             return match command.as_str() {
                 "help" | "h" | "-h" | "--help" => {
@@ -59,7 +54,7 @@ impl Config {
         Err("Command not specified. See 'help'".into())
     }
 
-    fn parse_library(library: Option<String>) -> StringResult {
+    fn parse_library(library: Option<String>) -> types::StringResult {
         if let Some(library) = library {
             Ok(library)
         } else {
@@ -67,7 +62,7 @@ impl Config {
         }
     }
 
-    fn parse_terms(&mut self, mut args: impl Iterator<Item = String>) -> UnitResult {
+    fn parse_terms(&mut self, mut args: impl Iterator<Item = String>) -> types::UnitResult {
         let first = args.next();
         if first.is_none() {
             return Err("Provide either search term(s), or URL(s). See 'help'".into());
@@ -100,7 +95,7 @@ impl Config {
     }
 
     /// Override default options with options from lib.conf
-    fn parse_lib_conf_options(&mut self) -> UnitResult {
+    fn parse_lib_conf_options(&mut self) -> types::UnitResult {
         if fs::metadata(&self.lib_conf_path.clone().unwrap()).is_err() {
             return Ok(()); // Leave defaults if lib.conf doesn't exist
         }
@@ -136,7 +131,7 @@ impl Config {
     }
 
     /// Override default options with CLI options
-    fn parse_cli_options(&mut self, mut args: impl Iterator<Item = String>) -> UnitResult {
+    fn parse_cli_options(&mut self, mut args: impl Iterator<Item = String>) -> types::UnitResult {
         while let Some(arg) = args.next() {
             if !arg.starts_with('-') {
                 break; // no (more) options
@@ -155,7 +150,7 @@ impl Config {
         Ok(())
     }
 
-    pub fn build(mut args: impl Iterator<Item = String>) -> ConfigResult {
+    pub fn build(mut args: impl Iterator<Item = String>) -> types::ConfigResult {
         args.next(); // Consume program name
 
         let (command, require_library) = Config::parse_command(args.next())?;
@@ -248,7 +243,7 @@ EXAMPLE
     /// - Some(true) if yt-dlp.conf exists, it will be used
     /// - Some(false) if the user wants to continue without yt-dlp.conf
     /// - None if the user wants to abort
-    fn yt_dlp_conf_exists(&self) -> BoolResult {
+    fn yt_dlp_conf_exists(&self) -> types::BoolResult {
         if fs::metadata(&self.yt_dlp_conf_path.clone().unwrap()).is_ok() {
             return Ok(Some(true));
         }
@@ -270,7 +265,7 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
 
 /// Attempts to append all terms to the input file.
 /// The library folder and input file are created if they do not exist.
-fn add(config: &Config) -> UnitResult {
+fn add(config: &Config) -> types::UnitResult {
     if fs::metadata(&config.lib_path.clone().unwrap()).is_err() {
         fs::create_dir_all(&config.lib_path.clone().unwrap())?;
     }
@@ -287,7 +282,7 @@ fn add(config: &Config) -> UnitResult {
 }
 
 /// Download URLs with yt-dlp
-fn yt_dlp(config: &Config, use_conf: bool, urls: HashSet<String>) -> UnitResult {
+fn yt_dlp(config: &Config, use_conf: bool, urls: HashSet<String>) -> types::UnitResult {
     let mut command = Command::new("yt-dlp");
     if use_conf {
         command
@@ -311,7 +306,7 @@ fn yt_dlp(config: &Config, use_conf: bool, urls: HashSet<String>) -> UnitResult 
     Ok(())
 }
 
-fn download(config: &Config) -> UnitResult {
+fn download(config: &Config) -> types::UnitResult {
     if fs::metadata(&config.lib_path.clone().unwrap()).is_err() {
         return Err(format!(
             "Library not found: {}",
@@ -383,7 +378,7 @@ fn download(config: &Config) -> UnitResult {
     Ok(())
 }
 
-fn list() -> UnitResult {
+fn list() -> types::UnitResult {
     let conf_path = PathBuf::from(dirs::config_dir().unwrap()).join("tapeworm");
     let libraries = fs::read_dir(&conf_path);
     if libraries.is_err() {
@@ -404,7 +399,7 @@ fn list() -> UnitResult {
 /// TARGET_DIR is created if not present.
 /// Directories are not moved, only files.
 /// If a file already exists in TARGET_DIR, it will be overwritten.
-fn post_process(config: &Config) -> UnitResult {
+fn post_process(config: &Config) -> types::UnitResult {
     if config.target_dir.is_none() {
         return Ok(());
     } else if config.yt_dlp_output_dir.is_none() {
@@ -439,7 +434,7 @@ fn post_process(config: &Config) -> UnitResult {
     Ok(())
 }
 
-pub fn run(config: Config) -> UnitResult {
+pub fn run(config: Config) -> types::UnitResult {
     match config.command.as_str() {
         "add" => add(&config),
         "download" => {
