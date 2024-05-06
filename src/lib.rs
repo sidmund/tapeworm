@@ -207,15 +207,22 @@ impl Config {
 tapeworm - A scraper and downloader written in Rust
 
 COMMANDS
-    tapeworm help
+    help
         Show this help message
 
-    tapeworm add LIBRARY [TERM... | URL...]
-        Add a term or URL to the library. If LIBRARY doesn't exist, it is created.
-        TERM consists of space-separated terms, combined to form a single query;
-        URL consists of space-separated URLs, treated as separate inputs
+    list
+        List all libraries
 
-    tapeworm download LIBRARY [OPTIONS]
+    add LIBRARY URL [URL...]
+        Add URLs to the library.
+        The library is created if it does not exist
+
+    add LIBRARY TERM [TERM...]
+        Combine all terms into a single search query and add it to the library.
+        The library is created if it does not exist.
+        NB: when invoking 'download', a YouTube video will be found for the query
+
+    download LIBRARY [OPTIONS]
         Given the inputs in ~/.config/tapeworm/LIBRARY/input.txt,
         scrape any queries and download all (scraped) URLs,
         using the config in ~/.config/tapeworm/LIBRARY/yt-dlp.conf
