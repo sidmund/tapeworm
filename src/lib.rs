@@ -339,6 +339,31 @@ fn add(config: &Config) -> UnitResult {
     Ok(())
 }
 
+/// Download URLs with yt-dlp
+fn yt_dlp(config: &Config, use_conf: bool, urls: HashSet<String>) -> UnitResult {
+    let mut command = Command::new("yt-dlp");
+    if use_conf {
+        command
+            .arg("--config-location")
+            .arg(&config.yt_dlp_conf_path.clone().unwrap());
+    }
+    urls.iter().for_each(|url| {
+        command.arg(url);
+    });
+    command.stdout(Stdio::piped());
+
+    let stdout = command.spawn()?.stdout.ok_or_else(|| {
+        std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
+    })?;
+
+    BufReader::new(stdout)
+        .lines()
+        .filter_map(|line| line.ok())
+        .for_each(|line| println!("{}", line));
+
+    Ok(())
+}
+
 fn download(config: &Config) -> UnitResult {
     if fs::metadata(&config.lib_path.clone().unwrap()).is_err() {
         return Err(format!(
@@ -402,26 +427,7 @@ fn download(config: &Config) -> UnitResult {
         inputs.iter().for_each(|s| println!("  {}", s));
     }
 
-    // Download with yt-dlp
-    let mut command = Command::new("yt-dlp");
-    if use_yt_dlp_conf {
-        command
-            .arg("--config-location")
-            .arg(&config.yt_dlp_conf_path.clone().unwrap());
-    }
-    inputs.iter().for_each(|input| {
-        command.arg(input);
-    });
-    command.stdout(Stdio::piped());
-
-    let stdout = command.spawn()?.stdout.ok_or_else(|| {
-        std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
-    })?;
-
-    BufReader::new(stdout)
-        .lines()
-        .filter_map(|line| line.ok())
-        .for_each(|line| println!("{}", line));
+    yt_dlp(&config, use_yt_dlp_conf, inputs)?;
 
     if config.clear_input {
         fs::write(&config.input_path.clone().unwrap(), "")?;
