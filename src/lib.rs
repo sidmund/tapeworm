@@ -368,10 +368,12 @@ fn list() -> types::UnitResult {
         return Ok(()); // No need to fail when no libraries are present
     }
 
-    libraries
-        .unwrap()
-        .filter(|l| l.is_ok_and(|l| l.file_type()?.is_dir()))
-        .for_each(|l| println!("{}", l.unwrap().file_name().to_str().unwrap()));
+    for library in libraries.unwrap() {
+        let library = library?;
+        if !library.file_type()?.is_dir() {
+            println!("{}", library.file_name().to_str().unwrap());
+        }
+    }
 
     Ok(())
 }
