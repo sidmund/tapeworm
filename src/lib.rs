@@ -432,12 +432,15 @@ fn download(config: &Config) -> UnitResult {
 
 fn list() -> UnitResult {
     let conf_path = PathBuf::from(dirs::config_dir().unwrap()).join("tapeworm");
-    if let Ok(libraries) = fs::read_dir(&conf_path) {
-        for library in libraries {
-            let library = library?;
-            if library.file_type()?.is_dir() {
-                println!("{}", library.file_name().to_str().unwrap());
-            }
+    let libraries = fs::read_dir(&conf_path);
+    if libraries.is_err() {
+        return Ok(()); // No need to fail when no libraries are present
+    }
+
+    for library in libraries.unwrap() {
+        let library = library?;
+        if library.file_type()?.is_dir() {
+            println!("{}", library.file_name().to_str().unwrap());
         }
     }
 
