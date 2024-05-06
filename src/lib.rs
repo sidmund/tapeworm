@@ -20,7 +20,6 @@ pub struct Config {
 
     // Download options
     pub clear_input: bool,
-    pub auto_scrape: bool,
     pub verbose: bool,
 
     // Paths
@@ -118,7 +117,6 @@ impl Config {
 
             let (key, value) = option.unwrap();
             match key.to_lowercase().as_str() {
-                "auto_scrape" => self.auto_scrape = value.parse::<bool>()?,
                 "clear_input" => self.clear_input = value.parse::<bool>()?,
                 "enable_tagging" => self.enable_tagging = value.parse::<bool>()?,
                 "target_dir" => self.target_dir = Some(PathBuf::from(value)),
@@ -141,7 +139,6 @@ impl Config {
             for s in arg[1..].chars() {
                 match s {
                     'c' => self.clear_input = true,
-                    'y' => self.auto_scrape = true,
                     'v' => self.verbose = true,
                     _ => return Err("Unrecognized option. See 'help'".into()),
                 };
@@ -238,13 +235,14 @@ DOWNLOAD OPTIONS
 
     -c      Clear the input file after scraping
     -v      Verbosely show what is being processed
-    -y      Automatically select the best scraped link if any are found
 
 EXAMPLE
     # Create the library by recording the first query
     tapeworm add LIBRARY the artist - a song  # records 'the artist - a song'
+
     # Add a URL
     tapeworm add LIBRARY https://youtube.com/watch?v=123
+
     # Scrape/download all
     tapeworm download LIBRARY
 "
