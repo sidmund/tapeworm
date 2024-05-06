@@ -1,61 +1,48 @@
 use crate::types;
-use crate::util;
 use crate::Config;
+use std::collections::HashSet;
 
-// When auto_scrape is enabled, the first found URL will be returned
-#[allow(dead_code)]
-pub fn scrape_page(
-    config: &Config,
-    tab: &headless_chrome::Tab,
-    page: String,
-) -> types::StringOptionResult {
-    tab.navigate_to(page.as_str())?;
+/// Scrape a Spotify playlist for a list of songs.
+/// Returns the list of songs, where each song is formatted like "TITLE ARTIST"
+pub fn spotify_playlist(_config: &Config, playlist_url: &str) -> types::HashSetResult {
+    let browser = headless_chrome::Browser::default()?;
+    let tab = browser.new_tab()?;
+    tab.navigate_to(playlist_url)?;
 
-    let mut results: Vec<(String, String)> = Vec::new();
-    for result_html in tab.wait_for_elements(".title-and-badge")? {
-        let attributes = result_html
-            .wait_for_element("a")?
-            .get_attributes()?
-            .unwrap();
+    println!("Scraping {}...", playlist_url);
 
-        if config.verbose {
-            println!("Found attributes: {}", attributes.join(" "));
-        }
+    let mut results = HashSet::new();
 
-        let title = attributes.get(7).unwrap().clone();
-        let rel_url = attributes.get(9).unwrap(); // /watch?v=VIDEO_ID&OTHER_ARGS
-        let url = format!(
-            "https://www.youtube.com{}",
-            rel_url.split("&").next().unwrap()
-        );
-
-        results.push((title, url));
-        if config.auto_scrape {
+    // Attempt scraping. If any error occurs, return what's been found so far
+    'outer: for _ in 0..5 {
+        let elements =
+            tab.wait_for_elements("div[data-testid='playlist-tracklist'] div[aria-colindex='2']");
+        if elements.is_err() {
             break;
         }
-    }
 
-    if results.is_empty() {
-        println!("No results found for '{}', skipping", page);
-        return Ok(None);
-    }
+        for html in elements.unwrap() {
+            let text = html.get_inner_text();
+            if text.is_err() {
+                break;
+            }
 
-    if config.auto_scrape {
-        let url = results.get(0).unwrap().1.clone();
-        println!("Found: {}", url);
-        return Ok(Some(url));
-    }
+            let text = text.unwrap().replace("\n", " ");
+            if text == "Title" {
+                continue;
+            }
 
-    let selected = loop {
-        println!("Select a result:");
-        results.iter().enumerate().for_each(|(i, (title, url))| {
-            println!("  {}. {} | {}", i + 1, title, url);
-        });
-        let index = util::input()?.parse::<usize>();
-        if index.as_ref().is_ok_and(|i| *i > 0 && *i <= results.len()) {
-            break index.unwrap() - 1;
+            println!("Found: {}", text);
+            results.insert(text);
         }
-        println!("Invalid input, please try again");
-    };
-    Ok(Some(results.get(selected).unwrap().1.clone()))
+
+        for _ in 0..2 {
+            if tab.press_key("PageDown").is_err() {
+                break 'outer;
+            }
+        }
+    }
+
+    println!("Total unique results: {}", results.len());
+    Ok(results)
 }

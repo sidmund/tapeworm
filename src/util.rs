@@ -1,7 +1,22 @@
-type StringResult = Result<String, Box<dyn std::error::Error>>;
+use crate::types;
+use std::fs;
+use std::io::{self, Write};
+use std::path::Path;
 
-pub fn input() -> StringResult {
+pub fn input() -> types::StringResult {
     let mut input = String::new();
-    std::io::stdin().read_line(&mut input)?;
+    io::stdin().read_line(&mut input)?;
     Ok(input.trim().to_lowercase())
+}
+
+pub fn append<P>(path: P, contents: String) -> types::UnitResult
+where
+    P: AsRef<Path>,
+{
+    fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?
+        .write_all(contents.as_bytes())?;
+    Ok(())
 }

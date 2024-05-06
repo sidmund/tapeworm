@@ -5,7 +5,7 @@ mod util;
 
 use std::collections::HashSet;
 use std::fs;
-use std::io::{BufRead, BufReader, ErrorKind, Write};
+use std::io::{BufRead, BufReader, ErrorKind};
 use std::path::PathBuf;
 use std::process::{self, Command, Stdio};
 use url::Url;
@@ -215,13 +215,17 @@ COMMANDS
         List all libraries
 
     add LIBRARY URL [URL...]
-        Add URLs to the library.
-        The library is created if it does not exist
+        Add URLs to the library. If the URL points to a Spotify playlist,
+        it will be scraped, and the found songs are added as YouTube search queries.
+        This is because of Spotify DRM restrictions.
+
+        If LIBRARY does not exist, it will be created.
 
     add LIBRARY TERM [TERM...]
         Combine all terms into a single search query and add it to the library.
-        The library is created if it does not exist.
-        NB: when invoking 'download', a YouTube video will be found for the query
+        NB: when invoking 'download', a YouTube video will be found for the query.
+
+        If LIBRARY does not exist, it will be created.
 
     download LIBRARY [OPTIONS]
         Given the inputs in ~/.config/tapeworm/LIBRARY/input.txt,
@@ -278,13 +282,31 @@ fn add(config: &Config) -> types::UnitResult {
         fs::create_dir_all(&config.lib_path.clone().unwrap())?;
     }
 
-    let mut input_file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&config.input_path.clone().unwrap())?;
+    let mut inputs: Vec<String> = Vec::new();
+    for term in config.terms.as_ref().unwrap().iter().map(|s| s.to_string()) {
+        if let Ok(url) = Url::parse(&term) {
+            let host = url.host_str();
+            let path = url.path();
 
-    let contents = format!("{}\n", config.terms.as_ref().unwrap().join("\n"));
-    input_file.write_all(contents.as_bytes())?;
+            if host == Some("open.spotify.com") && path.starts_with("/playlist") {
+                let scraped = scrape::spotify_playlist(config, &term);
+                if scraped.is_err() {
+                    println!("Error scraping {}: {}", term, scraped.unwrap_err());
+                    println!("Skipping...");
+                    continue;
+                }
+
+                for scraped in scraped.unwrap() {
+                    inputs.push(format!("ytsearch:\"{}\"", scraped));
+                }
+            }
+        } else {
+            inputs.push(term);
+        }
+    }
+
+    let contents = format!("{}\n", inputs.join("\n"));
+    util::append(&config.input_path.clone().unwrap(), contents)?;
 
     Ok(())
 }
