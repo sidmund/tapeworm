@@ -291,16 +291,16 @@ fn add(config: &Config) -> types::UnitResult {
                 if scraped.is_err() {
                     println!("Error scraping {}: {}", term, scraped.unwrap_err());
                     println!("Skipping...");
-                    continue;
+                } else {
+                    for scraped in scraped.unwrap() {
+                        inputs.push(format!("ytsearch:\"{}\"", scraped));
+                    }
                 }
-
-                for scraped in scraped.unwrap() {
-                    inputs.push(format!("ytsearch:\"{}\"", scraped));
-                }
+                continue;
             }
-        } else {
-            inputs.push(term);
         }
+
+        inputs.push(term);
     }
 
     let contents = format!("{}\n", inputs.join("\n"));
