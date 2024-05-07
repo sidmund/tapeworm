@@ -1,4 +1,5 @@
 use crate::types;
+use crate::util;
 use crate::Config;
 use audiotags::Tag;
 use regex::Regex;
@@ -25,14 +26,128 @@ pub fn tag(config: &Config) -> types::UnitResult {
         if entry.file_type()?.is_dir() {
             continue;
         }
+        let filename = entry.file_name().into_string().unwrap();
 
-        let tag = Tag::new().read_from_path(entry.path())?;
-        if let Some(title) = tag.title() {
-            build_tags(title, config.verbose);
+        let mut entry_tag = Tag::new().read_from_path(entry.path())?;
+        let title = entry_tag.title();
+        if title.is_none() {
+            continue;
+        }
+
+        let title = String::from(title.unwrap());
+        let tags = build_tags(title.as_str(), config.verbose);
+        if tags.is_none() {
+            continue;
+        }
+
+        let tags = tags.unwrap();
+
+        let mut year = None;
+        if let Some(y) = tags.get("year") {
+            if let Ok(y) = y.parse::<i32>() {
+                year = Some(y);
+            } else {
+                eprintln!("year is not a number: {}", y);
+            }
+        }
+
+        let mut title = if let Some(title) = tags.get("title") {
+            Some(title.to_owned())
+        } else {
+            None
+        };
+
+        let mut artist = None;
+        if let Some(author) = tags.get("author") {
+            let mut artists = author.split("&");
+
+            // First artist is seen as main
+            if let Some(a) = artists.next() {
+                artist = Some(a);
+            }
+
+            let mut feat = String::new();
+            while let Some(a) = artists.next() {
+                feat = format!("{}, {}", feat, a);
+            }
+            if let Some(i) = feat.rfind(',') {
+                feat.replace_range(i..=i, " &");
+            }
+            if !feat.is_empty() {
+                title = Some(format!("{} ({})", title.unwrap_or(String::new()), feat));
+            }
+        }
+
+        if let Some(remix) = tags.get("remix") {
+            title = Some(format!("{} [{}]", title.unwrap_or(String::new()), remix));
+        }
+
+        let new_filename = if let Some(artist) = artist.clone() {
+            if let Some(title) = title.clone() {
+                format!("{} - {}.mp3", artist, title)
+            } else {
+                format!("{}.mp3", artist)
+            }
+        } else if let Some(title) = title.clone() {
+            format!("{}.mp3", title)
+        } else {
+            filename.clone()
+        };
+
+        println!("Proposed changes:");
+        print_proposal("FILENAME", Some(&filename), Some(&new_filename));
+        println!("Tags:");
+        print_proposal("ARTIST", entry_tag.artist(), artist);
+        print_proposal("ALBUM_ARTIST", entry_tag.album_artist(), artist);
+        print_proposal(
+            "TITLE",
+            entry_tag.title(),
+            title.as_ref().map(|s| s.as_str()),
+        );
+        print_proposal("YEAR", entry_tag.year(), year);
+        println!("Accept these changes? Y/n");
+
+        let input = util::input()?;
+        if input.is_empty() || input.starts_with('y') {
+            if let Some(artist) = artist {
+                entry_tag.set_artist(&artist);
+                entry_tag.set_album_artist(&artist);
+            }
+            if let Some(title) = title {
+                entry_tag.set_title(title.as_str());
+            }
+            if let Some(year) = year {
+                entry_tag.set_year(year);
+            }
+            entry_tag.write_to_path(entry.path().to_str().unwrap())?;
+
+            if new_filename != filename {
+                fs::rename(entry.path(), entry.path().with_file_name(new_filename))?;
+            }
         }
     }
 
     Ok(())
+}
+
+fn print_proposal<T>(name: &str, old: Option<T>, new: Option<T>)
+where
+    T: std::fmt::Display + PartialEq,
+{
+    if old.is_none() {
+        if new.is_none() {
+            println!("{:<15} N/A", name);
+        } else {
+            println!("{:<15} N/A -> {}", name, new.unwrap());
+        }
+    } else {
+        let old = old.unwrap();
+        if new.is_none() || new.as_ref().is_some_and(|x| *x == old) {
+            println!("{:<15} {} -> unchanged", name, old);
+        } else {
+            println!("{:<15} {} -> {}", name, old, new.unwrap());
+        }
+    }
 }
 
 /// Attempt to extract tags from the title metadata.
