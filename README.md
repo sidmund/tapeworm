@@ -2,15 +2,15 @@
 
 tapeworm is a scraper and downloader written in Rust. It uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and can download whatever yt-dlp can download. tapeworm is not just a wrapper for yt-dlp, but sets itself apart with the features:
 
-- Scrape websites for URLs based on user-provided queries, see [supported websites](#supported-websites-for-scraping)
-- Download (scraped) URLs
+- Scrape websites for URLs or queries, see [supported websites](#supported-websites-for-scraping)
+- Download (scraped) URLs and queries
 - Manage different yt-dlp configurations
 
 ## Is this for you?
 
-If you just need to download URL(s), use yt-dlp. yt-dlp also has options for specifying an input file and configuration files. If that is not enough and you need some of the following features, tapeworm is for you:
+If you just need to download URL(s), use yt-dlp. yt-dlp has options for specifying an input file and configuration files. yt-dlp also works with queries like `yt-dlp ytsearch:"query"`. If that is not enough and you need some of the following features, tapeworm is for you:
 
-- You want to have both URLs and queries as inputs, where the queries are automatically used to scrape relevant URLs
+- You want to obtain URLs/queries from sites not supported by yt-dlp, e.g. yt-dlp cannot download from Spotify; but tapeworm can scrape Spotify for song information and will download the songs using `ytsearch` queries
 - You want a single application to both store URLs and for downloading them
 - You want to setup different download options for different sets of input URLs, and be able to easily configure and invoke them. E.g. you have a music and a video library and want a single application to easily download sources for them with the right options
 - You like the abstraction tapeworm provides by never having to specify the config file yourself, or worrying about what file to store URLs in, as this can all be done with simple tapeworm commands
@@ -40,7 +40,9 @@ tapeworm add LIBRARY https://youtube.com/watch?v=123
 tapeworm download LIBRARY
 ```
 
-Invoking `tapeworm download LIBRARY` will first scrape YouTube with each recorded search query to obtain URLs for them. Then, it will download all URLs. Optionally, it will process the downloaded files further, e.g. tagging audio files.
+If you add a URL from a [scraping supported site](#supported-websites-for-scraping), tapeworm will scrape that page to find song information and add that as a `ytsearch` query to the library.
+
+Downloading the library will first download each input (whether URL or query), and may then process the downloaded files further, e.g. tagging audio files.
 
 The behavior of the `download` command and subsequent processing is determined by the library configuration.
 
@@ -65,7 +67,6 @@ This specifies library settings, in newline-separated `name=value` pairs. If thi
 
 | Setting name | Default value | Description |
 |:-|:-|:-|
-| AUTO_SCRAPE | false | Manually select a URL, otherwise, use the first found URL |
 | CLEAR_INPUT | false | Clear input.txt after downloading |
 | ENABLE_TAGGING | false | Tag downloaded files. **Requires** `YT_DLP_OUTPUT_DIR` to be set. |
 | TARGET_DIR | | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `YT_DLP_OUTPUT_DIR` to be set. |
@@ -122,17 +123,27 @@ Setup music library with tagging. The Music folder only contains properly proces
 ```sh
 mkdir ~/.config/tapeworm/music
 cd ~/.config/tapeworm/music
-echo "CLEAR_INPUT=true" > lib.conf # empty input.txt when done
+echo "CLEAR_INPUT=true" >> lib.conf # empty input.txt when done
 echo "ENABLE_TAGGING=true" >> lib.conf
 echo "YT_DLP_OUTPUT_DIR=tmp" >> lib.conf
 echo "TARGET_DIR=/home/<user_name>/Music" >> lib.conf
-echo "-x -P '~/.config/tapeworm/music/tmp' <etc>" > yt-dlp.conf # add audio extraction and format options
 
 tapeworm add music https://youtube.com/watch?v=123
 tapeworm add music the artist - a song
 
 # Find URLs, download, and tag
 tapeworm download music
+```
+For tagging to work, the following yt-dlp.conf setup is required:
+```
+# If needed, modify your metadata with --parse-metadata or --replace-metadata
+# Required: embed the metadata. The title is set by default - you can modify it, but make sure it is set to something if you actually want the tagger to do something
+--embed-metadata
+
+# Add your other options, e.g. extraction and format, etc
+-x
+-P '~/.config/tapeworm/music/tmp'
+...
 ```
 
 Setup a library for archiving youtube channels:
@@ -149,9 +160,13 @@ echo "https://www.youtube.com/c/MyGamingChannel/videos" >> input.txt
 tapeworm download mychannels # call this every once in a while
 ```
 
+## Tagging
+
+The tagging feature exploits the information often contained in an uploaded video title, for example: `The Band ft. Artist - A Song (2000) [Instrumental]`. In order for this to work, make sure your yt-dlp.conf is set up with metadata options. The tagger uses the `title` metadata, so at least that field should be set. See the music library example under [Examples](#examples).
+
 ## Supported websites for scraping
 
 The following websites can currently be scraped:
 
-- YouTube
+- Spotify playlist
 

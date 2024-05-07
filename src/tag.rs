@@ -22,35 +22,33 @@ pub fn tag(config: &Config) -> types::UnitResult {
 
         let filename = entry.file_name();
         let filename = filename.to_str().unwrap();
+        // TODO instead of filename, use the TITLE metadata
         build_tags(filename, config.verbose);
     }
 
     Ok(())
 }
 
-/// Attempt to extract tags from filename.
+/// Attempt to extract tags from the title metadata.
 ///
 /// Returns None if no tags could be extracted.
 /// Otherwise, returns a HashMap with all found tags, a subset of:
 /// - author: a '&' separated list of authors
-/// - title
+/// - title: the title after removing other/spurious information
 /// - year
-/// - remix: (re)mixes, remasters, bootlegs are treated as 'remix'
-/// - extension
-fn build_tags(filename: &str, verbose: bool) -> Option<HashMap<&str, String>> {
+/// - remix: (re)mixes, remasters, bootlegs, instrumental are treated as 'remix'
+fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> {
     if verbose {
-        println!("Parsing: {}", filename);
+        println!("Parsing: {}", meta_title);
     }
 
     let mut tags: HashMap<&str, String> = HashMap::new();
 
-    let (mut filename, extension) = filename.split_at(filename.rfind(".").unwrap());
-    tags.insert("extension", String::from(&extension[1..]));
-
+    let mut meta_title = meta_title;
     let mut title = None;
 
     for delim in "-_~｜".chars() {
-        if let Some((author, full_title)) = filename.split_once(delim) {
+        if let Some((author, full_title)) = meta_title.split_once(delim) {
             let author = Regex::new(r"(featuring|feat\.?|ft\.?|&|,)")
                 .unwrap()
                 .split(author)
@@ -61,7 +59,7 @@ fn build_tags(filename: &str, verbose: bool) -> Option<HashMap<&str, String>> {
 
             let full_title = full_title.trim();
             title = Some(full_title.to_string());
-            filename = full_title;
+            meta_title = full_title;
             break;
         }
     }
@@ -69,11 +67,12 @@ fn build_tags(filename: &str, verbose: bool) -> Option<HashMap<&str, String>> {
     let re = Regex::new(
         r"(?xi)
         (?<year>\(\d{4}\)|\d{4}) |
-        (?<remix>[\[({<][^\[\](){}<>]*((re)?mix|remaster|bootleg)[^\[\](){}<>]*[\])}>])
+        (?<remix>[\[({<][^\[\](){}<>]*((re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
+        (?<strip>[\[({<][^\[\](){}<>]*(official video)[^\[\](){}<>]*[\])}>])
         ",
     );
 
-    for caps in re.unwrap().captures_iter(filename) {
+    for caps in re.unwrap().captures_iter(meta_title) {
         if verbose {
             println!("Captures: {:?}", caps);
         }
@@ -92,6 +91,12 @@ fn build_tags(filename: &str, verbose: bool) -> Option<HashMap<&str, String>> {
                 title = Some(remove_str_from_string(t, remix));
             }
             tags.insert("remix", remove_brackets(remix));
+        }
+
+        if let Some(strip) = caps.name("strip") {
+            if let Some(t) = title {
+                title = Some(remove_str_from_string(t, strip.as_str()));
+            }
         }
     }
 
@@ -126,61 +131,67 @@ fn remove_brackets(s: &str) -> String {
 mod tests {
     use super::*;
 
-    // TODO Add test cases as you encounter them IRL
+    #[test]
+    fn test_spacing() {
+        let songs = ["Band - Song", "Band- Song", "Band -Song", "Band-Song"];
+        for song in songs {
+            let tags = build_tags(song, true).unwrap();
+            assert_eq!(tags["author"], "Band");
+            assert_eq!(tags["title"], "Song");
+        }
+    }
 
     #[test]
     fn test_author() {
-        let tags = build_tags("Band - Song.mp3", true).unwrap();
-        assert_eq!(tags["author"], "Band");
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags["extension"], "mp3");
-
-        let tags = build_tags("Artist & Band - Song.mp3", true).unwrap();
+        let tags = build_tags("Artist & Band - Song", true).unwrap();
         assert_eq!(tags["author"], "Artist&Band");
 
-        let tags = build_tags("Artist, Other & Another - Song.mp3", true).unwrap();
+        let tags = build_tags("Artist, Other & Another - Song", true).unwrap();
         assert_eq!(tags["author"], "Artist&Other&Another");
 
-        let tags = build_tags("Artist ft. Other - Song.mp3", true).unwrap();
+        let tags = build_tags("Artist ft. Other - Song", true).unwrap();
         assert_eq!(tags["author"], "Artist&Other");
 
-        let tags = build_tags("Artist & Band feat. Other - Song.mp3", true).unwrap();
+        let tags = build_tags("Artist & Band feat. Other - Song", true).unwrap();
         assert_eq!(tags["author"], "Artist&Band&Other");
     }
 
     #[test]
     fn test_year() {
-        let tags = build_tags("Band - Song (2024).mp3", true).unwrap();
+        let tags = build_tags("Band - Song (2024)", true).unwrap();
         assert_eq!(tags["author"], "Band");
         assert_eq!(tags["title"], "Song");
         assert_eq!(tags["year"], "2024");
-        assert_eq!(tags["extension"], "mp3");
 
-        let tags = build_tags("Band - Song 2024.mp3", true).unwrap();
+        let tags = build_tags("Band - Song 2024", true).unwrap();
         assert_eq!(tags["title"], "Song");
         assert_eq!(tags["year"], "2024");
 
-        let tags = build_tags("Band - Song.mp3", true).unwrap();
+        let tags = build_tags("Band - Song", true).unwrap();
         assert_eq!(tags["title"], "Song");
         assert_eq!(tags.get("year"), None);
     }
 
     #[test]
     fn test_remix() {
-        let tags = build_tags("Artist - Song [Club Remix].mp3", true).unwrap();
+        let tags = build_tags("Artist - Song [Club Remix]", true).unwrap();
         assert_eq!(tags["author"], "Artist");
         assert_eq!(tags["title"], "Song");
         assert_eq!(tags["remix"], "Club Remix");
-        assert_eq!(tags["extension"], "mp3");
 
-        let tags = build_tags("Artist - Song (HQ REMASTER).mp3", true).unwrap();
+        let tags = build_tags("Artist- Song (HQ REMASTER)", true).unwrap();
+        assert_eq!(tags["author"], "Artist");
         assert_eq!(tags["title"], "Song");
         assert_eq!(tags["remix"], "HQ REMASTER");
 
-        let tags = build_tags("Artist & Band - Song (radio mix) 2003.mp3", true).unwrap();
+        let tags = build_tags("Artist & Band - Song (radio mix) 2003", true).unwrap();
         assert_eq!(tags["author"], "Artist&Band");
         assert_eq!(tags["title"], "Song");
         assert_eq!(tags["remix"], "radio mix");
         assert_eq!(tags["year"], "2003");
+
+        let tags = build_tags("Artist - Song [Instrumental]", true).unwrap();
+        assert_eq!(tags["title"], "Song");
+        assert_eq!(tags["remix"], "Instrumental");
     }
 }
