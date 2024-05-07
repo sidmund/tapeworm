@@ -39,7 +39,6 @@ pub fn tag(config: &Config) -> types::UnitResult {
         if tags.is_none() {
             continue;
         }
-
         let tags = tags.unwrap();
 
         let mut year = None;
@@ -47,7 +46,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
             if let Ok(y) = y.parse::<i32>() {
                 year = Some(y);
             } else {
-                eprintln!("year is not a number: {}", y);
+                eprintln!("year is not a number: {}, discarding", y);
             }
         }
 
@@ -107,6 +106,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
         print_proposal("YEAR", entry_tag.year(), year);
 
         if util::confirm("Accept these changes?", true)? {
+            // Write tags
             if let Some(artist) = artist {
                 entry_tag.set_artist(&artist);
                 entry_tag.set_album_artist(&artist);
