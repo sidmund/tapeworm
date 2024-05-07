@@ -11,6 +11,22 @@ pub fn input() -> types::StringResult {
     Ok(input.trim().to_lowercase())
 }
 
+/// Prompt the user for confirmation.
+///
+/// # Returns
+/// - `default` when the user presses 'Enter'
+/// - `true` if the user enters "y"
+/// - `false` if the user enters anything else
+pub fn confirm(prompt: &str, default: bool) -> types::BoolResult {
+    println!("{} {}", prompt, if default { "Y/n" } else { "y/N" });
+    let input = input()?;
+    if input.is_empty() {
+        Ok(default)
+    } else {
+        Ok(input.starts_with('y'))
+    }
+}
+
 pub fn append<P>(path: P, contents: String) -> types::UnitResult
 where
     P: AsRef<Path>,

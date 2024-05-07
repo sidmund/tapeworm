@@ -253,22 +253,21 @@ EXAMPLE
     /// - Some(true) if yt-dlp.conf exists, it will be used
     /// - Some(false) if the user wants to continue without yt-dlp.conf
     /// - None if the user wants to abort
-    fn yt_dlp_conf_exists(&self) -> types::BoolResult {
+    fn yt_dlp_conf_exists(&self) -> types::OptionBoolResult {
         if fs::metadata(&self.yt_dlp_conf_path.clone().unwrap()).is_ok() {
             return Ok(Some(true));
         }
 
         println!(
             "Warning: {} not found
-If you continue, yt-dlp will be invoked without any options, which will yield inconsistent results. Do you want to continue regardless? y/N",
+If you continue, yt-dlp will be invoked without any options, which will yield inconsistent results.",
             self.yt_dlp_conf_path.clone().unwrap().to_str().unwrap()
         );
 
-        let input = util::input()?;
-        if input.is_empty() || input.starts_with('n') {
-            Ok(None)
-        } else {
+        if util::confirm("Do you want to continue regardless?", false)? {
             Ok(Some(false))
+        } else {
+            Ok(None)
         }
     }
 }

@@ -105,10 +105,8 @@ pub fn tag(config: &Config) -> types::UnitResult {
             title.as_ref().map(|s| s.as_str()),
         );
         print_proposal("YEAR", entry_tag.year(), year);
-        println!("Accept these changes? Y/n");
 
-        let input = util::input()?;
-        if input.is_empty() || input.starts_with('y') {
+        if util::confirm("Accept these changes?", true)? {
             if let Some(artist) = artist {
                 entry_tag.set_artist(&artist);
                 entry_tag.set_album_artist(&artist);
