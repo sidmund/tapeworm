@@ -96,7 +96,13 @@ pub fn tag(config: &Config) -> types::UnitResult {
                 format!("{}.mp3", artist)
             }
         } else if let Some(title) = title.clone() {
-            format!("{}.mp3", title)
+            if let Some(tag_artist) = entry_tag.artist() {
+                // When filename led to only title being extracted, but the artist tag was set by
+                // yt-dlp, e.g. "Song.mp3" only gives tags "title: Song" but yt-dlp set the artist
+                format!("{} - {}.mp3", tag_artist, title)
+            } else {
+                format!("{}.mp3", title)
+            }
         } else {
             filename.clone()
         };
