@@ -1,10 +1,16 @@
 use crate::types;
 use crate::Config;
+use audiotags::Tag;
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+/// For each downloaded file, use its "title" metadata tag to extract more tags. If this tag is not
+/// present in the file, it will not be affected.
+///
+/// Titles generally contain extra information, e.g. "Artist ft. Band - Song (2024) [Remix]"
+/// Information such as collaborating artists, year, remix, etc. are extracted.
 pub fn tag(config: &Config) -> types::UnitResult {
     if !config.enable_tagging {
         return Ok(());
@@ -20,10 +26,10 @@ pub fn tag(config: &Config) -> types::UnitResult {
             continue;
         }
 
-        let filename = entry.file_name();
-        let filename = filename.to_str().unwrap();
-        // TODO instead of filename, use the TITLE metadata
-        build_tags(filename, config.verbose);
+        let tag = Tag::new().read_from_path(entry.path())?;
+        if let Some(title) = tag.title() {
+            build_tags(title, config.verbose);
+        }
     }
 
     Ok(())
@@ -45,7 +51,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
     let mut tags: HashMap<&str, String> = HashMap::new();
 
     let mut meta_title = meta_title;
-    let mut title = None;
+    let mut title = meta_title.to_string();
 
     for delim in "-_~｜".chars() {
         if let Some((author, full_title)) = meta_title.split_once(delim) {
@@ -58,7 +64,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
             tags.insert("author", author);
 
             let full_title = full_title.trim();
-            title = Some(full_title.to_string());
+            title = full_title.to_string();
             meta_title = full_title;
             break;
         }
@@ -68,7 +74,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
         r"(?xi)
         (?<year>\(\d{4}\)|\d{4}) |
         (?<remix>[\[({<][^\[\](){}<>]*((re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
-        (?<strip>[\[({<][^\[\](){}<>]*(official video)[^\[\](){}<>]*[\])}>])
+        (?<strip>[\[({<][^\[\](){}<>]*(official\s(music\s)?video)[^\[\](){}<>]*[\])}>])
         ",
     );
 
@@ -79,30 +85,22 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
 
         if let Some(year) = caps.name("year") {
             let year = year.as_str();
-            if let Some(t) = title {
-                title = Some(remove_str_from_string(t, year));
-            }
+            title = remove_str_from_string(title, year);
             tags.insert("year", remove_brackets(year));
         }
 
         if let Some(remix) = caps.name("remix") {
             let remix = remix.as_str();
-            if let Some(t) = title {
-                title = Some(remove_str_from_string(t, remix));
-            }
+            title = remove_str_from_string(title, remix);
             tags.insert("remix", remove_brackets(remix));
         }
 
         if let Some(strip) = caps.name("strip") {
-            if let Some(t) = title {
-                title = Some(remove_str_from_string(t, strip.as_str()));
-            }
+            title = remove_str_from_string(title, strip.as_str());
         }
     }
 
-    if let Some(title) = title {
-        tags.insert("title", title);
-    }
+    tags.insert("title", title);
 
     println!("Got tags: {:?}", tags);
 
