@@ -189,7 +189,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
         r"(?xi)
         (?<year>\(\d{4}\)|\d{4}) |
         (?<remix>[\[({<][^\[\](){}<>]*((re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
-        (?<strip>[\[({<][^\[\](){}<>]*(official\s(music\s)?video)[^\[\](){}<>]*[\])}>])
+        (?<strip>[\[({<][^\[\](){}<>]*((official\s)?(music\s)?video|m/?v|hq|hd)[^\[\](){}<>]*[\])}>])
         ",
     );
 
@@ -306,5 +306,32 @@ mod tests {
         let tags = build_tags("Artist - Song [Instrumental]", true).unwrap();
         assert_eq!(tags["title"], "Song");
         assert_eq!(tags["remix"], "Instrumental");
+    }
+
+    #[test]
+    fn test_strip() {
+        let tags = build_tags("Artist - Song [HQ]", true).unwrap();
+        assert_eq!(tags["title"], "Song");
+        assert_eq!(tags.get("remix"), None);
+
+        let tags = build_tags("Artist - Song [HD]", true).unwrap();
+        assert_eq!(tags["title"], "Song");
+        assert_eq!(tags.get("remix"), None);
+
+        let tags = build_tags("Artist - Song [M/V]", true).unwrap();
+        assert_eq!(tags["title"], "Song");
+        assert_eq!(tags.get("remix"), None);
+
+        let tags = build_tags("Artist - Song (Official Music Video)", true).unwrap();
+        assert_eq!(tags["title"], "Song");
+        assert_eq!(tags.get("remix"), None);
+
+        let tags = build_tags("Artist - Song (Official Video)", true).unwrap();
+        assert_eq!(tags["title"], "Song");
+        assert_eq!(tags.get("remix"), None);
+
+        let tags = build_tags("Artist - Song (Music Video)", true).unwrap();
+        assert_eq!(tags["title"], "Song");
+        assert_eq!(tags.get("remix"), None);
     }
 }
