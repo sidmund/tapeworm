@@ -19,16 +19,24 @@ pub fn tag(config: &Config) -> types::UnitResult {
         return Err("'YT_DLP_OUTPUT_DIR' must be set when tagging is enabled. See 'help'".into());
     }
 
+    println!("\nTAGGING FILES...");
+
     let downloads = PathBuf::from(config.lib_path.clone().unwrap())
         .join(config.yt_dlp_output_dir.clone().unwrap());
-    for entry in fs::read_dir(downloads)? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            continue;
-        }
-        let filename = entry.file_name().into_string().unwrap();
+    let downloads: Vec<PathBuf> = fs::read_dir(downloads)?
+        .filter(|e| {
+            e.as_ref()
+                .is_ok_and(|t| t.file_type().is_ok_and(|f| f.is_file()))
+        })
+        .map(|e| e.unwrap().path())
+        .collect();
+    let total = downloads.len();
 
-        let mut entry_tag = Tag::new().read_from_path(entry.path())?;
+    for (i, entry) in downloads.iter().enumerate() {
+        let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
+        println!("Tagging {} of {}: {}", i + 1, total, filename);
+
+        let mut entry_tag = Tag::new().read_from_path(entry)?;
         let title = entry_tag.title();
         if title.is_none() {
             continue;
@@ -117,10 +125,10 @@ pub fn tag(config: &Config) -> types::UnitResult {
             if let Some(year) = year {
                 entry_tag.set_year(year);
             }
-            entry_tag.write_to_path(entry.path().to_str().unwrap())?;
+            entry_tag.write_to_path(entry.to_str().unwrap())?;
 
             if new_filename != filename {
-                fs::rename(entry.path(), entry.path().with_file_name(new_filename))?;
+                fs::rename(entry, entry.with_file_name(new_filename))?;
             }
         }
     }
@@ -215,7 +223,9 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
 
     tags.insert("title", title);
 
-    println!("Got tags: {:?}", tags);
+    if verbose {
+        println!("Got tags: {:?}", tags);
+    }
 
     Some(tags)
 }
