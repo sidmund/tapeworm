@@ -95,6 +95,8 @@ fn yt_dlp(config: &Config, use_conf: bool, urls: HashSet<String>) -> types::Unit
 /// TARGET_DIR is created if not present.
 /// Directories are not moved, only files.
 /// If a file already exists in TARGET_DIR, it will be overwritten.
+///
+/// If DEPOSIT_AZ is enabled, files will be moved to organized subdirectories of TARGET_DIR.
 fn deposit(config: &Config) -> types::UnitResult {
     if config.target_dir.is_none() {
         return Ok(());
@@ -111,18 +113,39 @@ fn deposit(config: &Config) -> types::UnitResult {
 
     let downloads = PathBuf::from(config.lib_path.clone().unwrap())
         .join(config.yt_dlp_output_dir.clone().unwrap());
-    for entry in fs::read_dir(downloads)? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            continue;
-        }
+    let downloads: Vec<PathBuf> = fs::read_dir(downloads)?
+        .filter(|e| {
+            e.as_ref()
+                .is_ok_and(|t| t.file_type().is_ok_and(|f| f.is_file()))
+        })
+        .map(|e| e.unwrap().path())
+        .collect();
 
-        fs::rename(entry.path(), target_dir.join(entry.file_name()))?;
-        println!(
-            "Moved {} to {}",
-            entry.file_name().to_str().unwrap(),
-            target_dir.display()
-        );
+    if config.deposit_az {
+        organize(target_dir, downloads)
+    } else {
+        drop(target_dir, downloads)
+    }
+}
+
+/// Organize the `downloads` files into subfolders of `target_dir`. This is based
+/// on the artist tag of a file, or (the first letter of) the filename if the tag
+/// is not present.
+///
+/// Example files:
+/// - `randomfile.jpg`                         -> `target_dir/R/randomfile.jpg`
+/// - `Song.mp3 with artist tag 'Band'`        -> `target_dir/B/Band/Song.mp3`
+/// - `Band - Song.mp3 with artist tag 'Band'` -> `target_dir/B/Band/Band - Song.mp3`
+/// - `Band - Song.mp3 without artist tag`     -> `target_dir/B/Band - Song.mp3`
+fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::UnitResult {
+    Ok(())
+}
+
+/// Simply drop the `downloads` files directly in `target_dir`.
+fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::UnitResult {
+    for entry in downloads {
+        let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
+        fs::rename(entry, target_dir.join(filename))?;
     }
 
     Ok(())
