@@ -1,13 +1,14 @@
+mod add;
+mod download;
+mod info;
 mod scrape;
 mod tag;
 mod types;
 mod util;
 
-use std::collections::HashSet;
 use std::fs;
-use std::io::{BufRead, BufReader, ErrorKind};
 use std::path::PathBuf;
-use std::process::{self, Command, Stdio};
+use std::process;
 use url::Url;
 
 #[derive(Default)]
@@ -39,7 +40,7 @@ impl Config {
         if let Some(command) = command {
             return match command.as_str() {
                 "help" | "h" | "-h" | "--help" => {
-                    Config::help();
+                    info::help();
                     process::exit(0);
                 }
                 // Commands that require a library
@@ -199,56 +200,6 @@ impl Config {
         Ok(config)
     }
 
-    fn help() {
-        println!(
-            "\
-tapeworm - A scraper and downloader written in Rust
-
-COMMANDS
-    help
-        Show this help message
-
-    list
-        List all libraries
-
-    add LIBRARY URL [URL...]
-        Add URLs to the library. If the URL points to a Spotify playlist,
-        it will be scraped, and the found songs are added as YouTube search queries.
-        This is because of Spotify DRM restrictions.
-
-        If LIBRARY does not exist, it will be created.
-
-    add LIBRARY TERM [TERM...]
-        Combine all terms into a single search query and add it to the library.
-        NB: when invoking 'download', a YouTube video will be found for the query.
-
-        If LIBRARY does not exist, it will be created.
-
-    download LIBRARY [OPTIONS]
-        Given the inputs in ~/.config/tapeworm/LIBRARY/input.txt,
-        scrape any queries and download all (scraped) URLs,
-        using the config in ~/.config/tapeworm/LIBRARY/yt-dlp.conf
-
-DOWNLOAD OPTIONS
-    The options from ~/.config/tapeworm/LIBRARY/lib.conf are loaded first.
-    Setting a CLI option will override its value in the lib.conf file, if present.
-
-    -c      Clear the input file after scraping
-    -v      Verbosely show what is being processed
-
-EXAMPLE
-    # Create the library by recording the first query
-    tapeworm add LIBRARY the artist - a song  # records 'the artist - a song'
-
-    # Add a URL
-    tapeworm add LIBRARY https://youtube.com/watch?v=123
-
-    # Scrape/download all
-    tapeworm download LIBRARY
-"
-        );
-    }
-
     /// Returns:
     /// - Some(true) if yt-dlp.conf exists, it will be used
     /// - Some(false) if the user wants to continue without yt-dlp.conf
@@ -272,179 +223,11 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
     }
 }
 
-/// Attempts to append all terms to the input file.
-/// The library folder and input file are created if they do not exist.
-fn add(config: &Config) -> types::UnitResult {
-    if fs::metadata(&config.lib_path.clone().unwrap()).is_err() {
-        fs::create_dir_all(&config.lib_path.clone().unwrap())?;
-    }
-
-    let mut inputs: Vec<String> = Vec::new();
-    for term in config.terms.as_ref().unwrap().iter().map(|s| s.to_string()) {
-        if let Ok(url) = Url::parse(&term) {
-            let host = url.host_str();
-            let path = url.path();
-
-            if host == Some("open.spotify.com") && path.starts_with("/playlist") {
-                let scraped = scrape::spotify_playlist(config, &term);
-                if scraped.is_err() {
-                    println!("Error scraping {}: {}", term, scraped.unwrap_err());
-                    println!("Skipping...");
-                } else {
-                    for scraped in scraped.unwrap() {
-                        inputs.push(format!("ytsearch:\"{}\"", scraped));
-                    }
-                }
-                continue;
-            }
-        }
-
-        inputs.push(term);
-    }
-
-    let contents = format!("{}\n", inputs.join("\n"));
-    util::append(&config.input_path.clone().unwrap(), contents)?;
-
-    Ok(())
-}
-
-/// Download URLs with yt-dlp
-fn yt_dlp(config: &Config, use_conf: bool, urls: HashSet<String>) -> types::UnitResult {
-    let mut command = Command::new("yt-dlp");
-    if use_conf {
-        command
-            .arg("--config-location")
-            .arg(&config.yt_dlp_conf_path.clone().unwrap());
-    }
-    urls.iter().for_each(|url| {
-        command.arg(url);
-    });
-    command.stdout(Stdio::piped());
-
-    let stdout = command.spawn()?.stdout.ok_or_else(|| {
-        std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
-    })?;
-
-    BufReader::new(stdout)
-        .lines()
-        .filter_map(|line| line.ok())
-        .for_each(|line| println!("{}", line));
-
-    Ok(())
-}
-
-fn download(config: &Config) -> types::UnitResult {
-    if fs::metadata(&config.lib_path.clone().unwrap()).is_err() {
-        return Err(format!(
-            "Library not found: {}",
-            config.lib_path.clone().unwrap().to_str().unwrap()
-        )
-        .into());
-    }
-
-    let use_yt_dlp_conf = if let Some(value) = config.yt_dlp_conf_exists()? {
-        value
-    } else {
-        return Ok(()); // User wants to abort when config is not found
-    };
-
-    if fs::metadata(&config.input_path.clone().unwrap()).is_err() {
-        return Err(format!(
-            "Input file not found: {}",
-            config.input_path.clone().unwrap().to_str().unwrap()
-        )
-        .into());
-    }
-
-    let inputs = fs::read_to_string(&config.input_path.clone().unwrap())?;
-    if inputs.is_empty() {
-        if config.verbose {
-            println!("Nothing to download. Library is empty.");
-        }
-        return Ok(());
-    }
-
-    let inputs: HashSet<String> = inputs.lines().map(|s| s.to_string()).collect();
-
-    if config.verbose {
-        println!("Downloading {} URLs:", inputs.len());
-        inputs.iter().for_each(|s| println!("  {}", s));
-    }
-
-    yt_dlp(&config, use_yt_dlp_conf, inputs)?;
-
-    if config.clear_input {
-        fs::write(&config.input_path.clone().unwrap(), "")?;
-    }
-
-    Ok(())
-}
-
-fn list() -> types::UnitResult {
-    let conf_path = PathBuf::from(dirs::config_dir().unwrap()).join("tapeworm");
-    let libraries = fs::read_dir(&conf_path);
-    if libraries.is_err() {
-        return Ok(()); // No need to fail when no libraries are present
-    }
-
-    for library in libraries.unwrap() {
-        let library = library?;
-        if library.path().is_dir() {
-            println!("{}", library.file_name().to_str().unwrap());
-        }
-    }
-
-    Ok(())
-}
-
-/// Attempt to move all downloaded (and processed) files in YT_DLP_OUTPUT_DIR to TARGET_DIR.
-/// TARGET_DIR is created if not present.
-/// Directories are not moved, only files.
-/// If a file already exists in TARGET_DIR, it will be overwritten.
-fn post_process(config: &Config) -> types::UnitResult {
-    if config.target_dir.is_none() {
-        return Ok(());
-    } else if config.yt_dlp_output_dir.is_none() {
-        return Err(
-            "'YT_DLP_OUTPUT_DIR' must be set for moving downloads to 'TARGET_DIR'. See 'help'"
-                .into(),
-        );
-    }
-
-    let target_dir =
-        PathBuf::from(config.lib_path.clone().unwrap()).join(config.target_dir.clone().unwrap());
-    if fs::metadata(&target_dir).is_err() {
-        fs::create_dir_all(&target_dir)?;
-    }
-
-    let downloads = PathBuf::from(config.lib_path.clone().unwrap())
-        .join(config.yt_dlp_output_dir.clone().unwrap());
-    for entry in fs::read_dir(downloads)? {
-        let entry = entry?;
-        if entry.file_type()?.is_dir() {
-            continue;
-        }
-
-        fs::rename(entry.path(), target_dir.join(entry.file_name()))?;
-        println!(
-            "Moved {} to {}",
-            entry.file_name().to_str().unwrap(),
-            target_dir.display()
-        );
-    }
-
-    Ok(())
-}
-
 pub fn run(config: Config) -> types::UnitResult {
     match config.command.as_str() {
-        "add" => add(&config),
-        "download" => {
-            download(&config)?;
-            tag::tag(&config)?;
-            post_process(&config)
-        }
-        "list" => list(),
+        "add" => add::add(&config),
+        "download" => download::download(&config),
+        "list" => info::list(),
         _ => Ok(()),
     }
 }
