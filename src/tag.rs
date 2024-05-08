@@ -1,3 +1,5 @@
+//! This module provides functionality for extracting tags from a filename.
+
 use crate::types;
 use crate::util;
 use crate::Config;
@@ -212,18 +214,18 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
 
         if let Some(year) = caps.name("year") {
             let year = year.as_str();
-            title = remove_str_from_string(title, year);
-            tags.insert("year", remove_brackets(year));
+            title = util::remove_str_from_string(title, year);
+            tags.insert("year", util::remove_brackets(year));
         }
 
         if let Some(remix) = caps.name("remix") {
             let remix = remix.as_str();
-            title = remove_str_from_string(title, remix);
-            tags.insert("remix", remove_brackets(remix));
+            title = util::remove_str_from_string(title, remix);
+            tags.insert("remix", util::remove_brackets(remix));
         }
 
         if let Some(strip) = caps.name("strip") {
-            title = remove_str_from_string(title, strip.as_str());
+            title = util::remove_str_from_string(title, strip.as_str());
         }
     }
 
@@ -234,24 +236,6 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
     }
 
     Some(tags)
-}
-
-fn remove_str_from_string(s: String, to_remove: &str) -> String {
-    let without = s.split(to_remove).fold(String::new(), |acc, s| acc + s);
-    String::from(without.trim())
-}
-
-/// Remove leading and trailing brackets
-fn remove_brackets(s: &str) -> String {
-    let s = s.trim();
-    let mut result = String::from(s);
-    if s.starts_with(&['(', '[', '{', '<']) {
-        result.remove(0);
-    }
-    if s.ends_with(&[')', ']', '}', '>']) {
-        result.pop();
-    }
-    result
 }
 
 #[cfg(test)]
