@@ -7,6 +7,7 @@ use crate::tag;
 use crate::types;
 use crate::util;
 use crate::Config;
+use audiotags::Tag;
 use std::collections::HashSet;
 use std::fs;
 use std::io::{BufRead, BufReader, ErrorKind};
@@ -138,7 +139,64 @@ fn deposit(config: &Config) -> types::UnitResult {
 /// - `Band - Song.mp3 with artist tag 'Band'` -> `target_dir/B/Band/Band - Song.mp3`
 /// - `Band - Song.mp3 without artist tag`     -> `target_dir/B/Band - Song.mp3`
 fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::UnitResult {
-    Ok(())
+    let mut errors = Vec::new();
+
+    for entry in downloads {
+        let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
+
+        let target = if let Ok(tag) = Tag::new().read_from_path(&entry) {
+            if let Some(artist) = tag.artist() {
+                // '.' cannot appear last in folder name
+                let artist = if artist.ends_with('.') {
+                    &artist[..artist.len() - 1]
+                } else {
+                    artist
+                };
+                let letter = letter_for(artist);
+
+                target_dir.join(letter).join(artist).join(filename)
+            } else {
+                target_dir.join(letter_for(&filename)).join(filename)
+            }
+        } else {
+            target_dir.join(letter_for(&filename)).join(filename)
+        };
+
+        // Check if a file already exist at target location
+        if fs::metadata(&target).is_ok() {
+            println!("Overwriting existing file...");
+            // TODO prompt user if ok to overwrite?
+        }
+
+        // TODO it seems that if rename TO does not exist, it will be created? test this
+        if fs::rename(entry.clone(), target.clone()).is_err() {
+            errors.push(entry);
+        } else {
+            println!("  {} -> {}", entry.display(), target.display());
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Could not move {} files to target directory:\n{}",
+            errors.len(),
+            errors
+                .iter()
+                .map(|e| e.display().to_string())
+                .fold(String::new(), |a, b| a + "\n" + &b)
+        )
+        .into())
+    }
+}
+
+fn letter_for(s: &str) -> String {
+    let mut letter = String::from(&s[..1].to_uppercase());
+    if !"ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains(letter.as_str()) {
+        letter = String::from("0-9#"); // symbols and 'weird letters'
+    }
+    letter
 }
 
 /// Simply drop the `downloads` files directly in `target_dir`.
