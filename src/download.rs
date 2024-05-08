@@ -122,11 +122,27 @@ fn deposit(config: &Config) -> types::UnitResult {
         .map(|e| e.unwrap().path())
         .collect();
 
-    if config.deposit_az {
+    if downloads.is_empty() {
+        return Ok(());
+    }
+
+    if let Some(errors) = if config.deposit_az {
         organize(target_dir, downloads)
     } else {
         drop(target_dir, downloads)
+    } {
+        return Err(format!(
+            "Could not move {} files to target directory:{}",
+            errors.len(),
+            errors
+                .iter()
+                .map(|(e, t)| format!("! {}\n    -> {}", e.display(), t.display()))
+                .fold(String::new(), |a, b| a + "\n" + &b)
+        )
+        .into());
     }
+
+    Ok(())
 }
 
 /// Organize the `downloads` files into subfolders of `target_dir`. This is based
@@ -138,7 +154,9 @@ fn deposit(config: &Config) -> types::UnitResult {
 /// - `Song.mp3 with artist tag 'Band'`        -> `target_dir/B/Band/Song.mp3`
 /// - `Band - Song.mp3 with artist tag 'Band'` -> `target_dir/B/Band/Band - Song.mp3`
 /// - `Band - Song.mp3 without artist tag`     -> `target_dir/B/Band - Song.mp3`
-fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::UnitResult {
+fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecPathBuf {
+    println!("Sorting files into {}...", target_dir.display());
+
     let mut errors = Vec::new();
 
     for entry in downloads {
@@ -154,40 +172,33 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::UnitResult {
                 };
                 let letter = letter_for(artist);
 
-                target_dir.join(letter).join(artist).join(filename)
+                target_dir.join(letter).join(artist)
             } else {
-                target_dir.join(letter_for(&filename)).join(filename)
+                target_dir.join(letter_for(&filename))
             }
         } else {
-            target_dir.join(letter_for(&filename)).join(filename)
+            target_dir.join(letter_for(&filename))
         };
 
+        // TODO instead of unwrap, add a "Couldnt create dir" message to errors
+        let target = util::guarantee_dir_path(target).unwrap().join(filename);
         // Check if a file already exist at target location
         if fs::metadata(&target).is_ok() {
             println!("Overwriting existing file...");
             // TODO prompt user if ok to overwrite?
         }
 
-        // TODO it seems that if rename TO does not exist, it will be created? test this
         if fs::rename(entry.clone(), target.clone()).is_err() {
-            errors.push(entry);
+            errors.push((entry, target));
         } else {
             println!("  {} -> {}", entry.display(), target.display());
         }
     }
 
     if errors.is_empty() {
-        Ok(())
+        None
     } else {
-        Err(format!(
-            "Could not move {} files to target directory:\n{}",
-            errors.len(),
-            errors
-                .iter()
-                .map(|e| e.display().to_string())
-                .fold(String::new(), |a, b| a + "\n" + &b)
-        )
-        .into())
+        Some(errors)
     }
 }
 
@@ -200,11 +211,31 @@ fn letter_for(s: &str) -> String {
 }
 
 /// Simply drop the `downloads` files directly in `target_dir`.
-fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::UnitResult {
+fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecPathBuf {
+    println!("Dropping files into {}...", target_dir.display());
+
+    let mut errors = Vec::new();
+
     for entry in downloads {
         let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
-        fs::rename(entry, target_dir.join(filename))?;
+
+        let target = target_dir.join(filename);
+        // Check if a file already exist at target location
+        if fs::metadata(&target).is_ok() {
+            println!("Overwriting existing file...");
+            // TODO prompt user if ok to overwrite?
+        }
+
+        if fs::rename(entry.clone(), target.clone()).is_err() {
+            errors.push((entry, target));
+        } else {
+            println!("  {} -> {}", entry.display(), target.display());
+        }
     }
 
-    Ok(())
+    if errors.is_empty() {
+        None
+    } else {
+        Some(errors)
+    }
 }
