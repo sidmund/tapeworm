@@ -28,11 +28,14 @@ pub struct Config {
     pub lib_conf_path: Option<PathBuf>,
     pub input_path: Option<PathBuf>,
     pub yt_dlp_conf_path: Option<PathBuf>,
-    pub target_dir: Option<PathBuf>,
 
     // Tagging
     pub enable_tagging: bool,
     pub yt_dlp_output_dir: Option<PathBuf>,
+
+    // Depositing
+    pub deposit_az: bool,
+    pub target_dir: Option<PathBuf>,
 }
 
 impl Config {
@@ -119,6 +122,7 @@ impl Config {
             let (key, value) = option.unwrap();
             match key.to_lowercase().as_str() {
                 "clear_input" => self.clear_input = value.parse::<bool>()?,
+                "deposit_az" => self.deposit_az = value.parse::<bool>()?,
                 "enable_tagging" => self.enable_tagging = value.parse::<bool>()?,
                 "target_dir" => self.target_dir = Some(PathBuf::from(value)),
                 "verbose" => self.verbose = value.parse::<bool>()?,
@@ -138,6 +142,7 @@ impl Config {
             }
 
             for s in arg[1..].chars() {
+                // TODO add support for tagging/depositing here
                 match s {
                     'c' => self.clear_input = true,
                     'v' => self.verbose = true,

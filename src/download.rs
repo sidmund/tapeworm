@@ -15,7 +15,7 @@ use std::process::{Command, Stdio};
 pub fn download(config: &Config) -> types::UnitResult {
     download_inputs(&config)?;
     tag::tag(&config)?;
-    post_process(&config)
+    deposit(&config)
 }
 
 fn download_inputs(config: &Config) -> types::UnitResult {
@@ -94,7 +94,7 @@ fn yt_dlp(config: &Config, use_conf: bool, urls: HashSet<String>) -> types::Unit
 /// TARGET_DIR is created if not present.
 /// Directories are not moved, only files.
 /// If a file already exists in TARGET_DIR, it will be overwritten.
-fn post_process(config: &Config) -> types::UnitResult {
+fn deposit(config: &Config) -> types::UnitResult {
     if config.target_dir.is_none() {
         return Ok(());
     } else if config.yt_dlp_output_dir.is_none() {
