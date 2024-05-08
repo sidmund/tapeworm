@@ -3,7 +3,7 @@
 use crate::types;
 use std::fs;
 use std::io::{self, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Read a line from stdin.
 /// The line is trimmed and converted to lowercase.
@@ -39,6 +39,16 @@ where
         .open(path)?
         .write_all(contents.as_bytes())?;
     Ok(())
+}
+
+/// If the path `dir` does not exist, it is created.
+/// Returns ownership of `dir`, guaranteed to be an existing directory.
+pub fn guarantee_dir_path(dir: PathBuf) -> types::PathBufResult {
+    if fs::metadata(&dir).is_err() {
+        fs::create_dir_all(&dir)?;
+    }
+
+    Ok(dir)
 }
 
 pub fn remove_str_from_string(s: String, to_remove: &str) -> String {

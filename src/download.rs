@@ -5,6 +5,7 @@
 
 use crate::tag;
 use crate::types;
+use crate::util;
 use crate::Config;
 use std::collections::HashSet;
 use std::fs;
@@ -106,9 +107,7 @@ fn deposit(config: &Config) -> types::UnitResult {
 
     let target_dir =
         PathBuf::from(config.lib_path.clone().unwrap()).join(config.target_dir.clone().unwrap());
-    if fs::metadata(&target_dir).is_err() {
-        fs::create_dir_all(&target_dir)?;
-    }
+    let target_dir = util::guarantee_dir_path(target_dir)?;
 
     let downloads = PathBuf::from(config.lib_path.clone().unwrap())
         .join(config.yt_dlp_output_dir.clone().unwrap());
