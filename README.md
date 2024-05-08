@@ -179,7 +179,9 @@ tapeworm download mychannels # call this every once in a while
 
 ## Tagging
 
-The tagging feature exploits the information often contained in an uploaded video title, for example: `The Band ft. Artist - A Song (2000) [Instrumental]`. In order for this to work, make sure your yt-dlp.conf is set up with metadata options. The tagger uses the `title` metadata, so at least that field should be set. See the music library example under [Examples](#examples).
+The tagging feature exploits the information often contained in an uploaded video title, for example: `The Band ft. Artist - A Song (2000) [Instrumental]`. In order for this to work, make sure your `yt-dlp.conf` is set up with metadata options. The tagger uses the `title` metadata, so at least that field should be set (setting `--embed-metadata` is enough for this). See the music library example under [Examples](#examples).
+
+Note that if you have metadata options in `yt-dlp.conf` these are always applied, enabling or disabling tagging does not change that. Tagging only acts as an additional processing step.
 
 ## Supported websites for scraping
 

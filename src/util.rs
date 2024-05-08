@@ -60,10 +60,10 @@ pub fn remove_str_from_string(s: String, to_remove: &str) -> String {
 pub fn remove_brackets(s: &str) -> String {
     let s = s.trim();
     let mut result = String::from(s);
-    if s.starts_with(&['(', '[', '{', '<']) {
+    if s.starts_with(&['(', '[', '{', '<', '【']) {
         result.remove(0);
     }
-    if s.ends_with(&[')', ']', '}', '>']) {
+    if s.ends_with(&[')', ']', '}', '>', '】']) {
         result.pop();
     }
     result
