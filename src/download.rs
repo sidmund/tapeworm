@@ -188,14 +188,8 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecStr
             continue;
         }
 
-        if fs::rename(entry.clone(), target.clone()).is_err() {
-            errors.push(format!(
-                "! {}\n    -> {}",
-                entry.display(),
-                target.display()
-            ));
-        } else {
-            println!("  {} -> {}", entry.display(), target.display());
+        if let Some(error) = rename(entry, target) {
+            errors.push(error);
         }
     }
 
@@ -222,14 +216,8 @@ fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecString 
             continue;
         }
 
-        if fs::rename(entry.clone(), target.clone()).is_err() {
-            errors.push(format!(
-                "! {}\n    -> {}",
-                entry.display(),
-                target.display()
-            ));
-        } else {
-            println!("  {} -> {}", entry.display(), target.display());
+        if let Some(error) = rename(entry, target) {
+            errors.push(error);
         }
     }
 
@@ -237,6 +225,24 @@ fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecString 
         None
     } else {
         Some(errors)
+    }
+}
+
+/// Attempt to rename (move) the `entry` file to `target` file.
+///
+/// # Returns
+/// - `None` when successful
+/// - `Some(String)` with a file error message
+fn rename(entry: PathBuf, target: PathBuf) -> Option<String> {
+    if fs::rename(entry.clone(), target.clone()).is_err() {
+        Some(format!(
+            "! {}\n    -> {}",
+            entry.display(),
+            target.display()
+        ))
+    } else {
+        println!("  {} -> {}", entry.display(), target.display());
+        None
     }
 }
 
