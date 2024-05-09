@@ -51,6 +51,16 @@ pub fn guarantee_dir_path(dir: PathBuf) -> types::PathBufResult {
     Ok(dir)
 }
 
+pub fn filepaths_in(dir: PathBuf) -> types::VecPathBufResult {
+    Ok(fs::read_dir(dir)?
+        .filter(|e| {
+            e.as_ref()
+                .is_ok_and(|t| t.file_type().is_ok_and(|f| f.is_file()))
+        })
+        .map(|e| e.unwrap().path())
+        .collect())
+}
+
 /// Remove a string in its entirety from another string.
 ///
 // TODO fix doc test

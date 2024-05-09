@@ -25,13 +25,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
 
     let downloads = PathBuf::from(config.lib_path.clone().unwrap())
         .join(config.yt_dlp_output_dir.clone().unwrap());
-    let downloads: Vec<PathBuf> = fs::read_dir(downloads)?
-        .filter(|e| {
-            e.as_ref()
-                .is_ok_and(|t| t.file_type().is_ok_and(|f| f.is_file()))
-        })
-        .map(|e| e.unwrap().path())
-        .collect();
+    let downloads: Vec<PathBuf> = util::filepaths_in(downloads)?;
     let total = downloads.len();
 
     for (i, entry) in downloads.iter().enumerate() {
