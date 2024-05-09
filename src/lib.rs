@@ -47,7 +47,7 @@ impl Config {
                     process::exit(0);
                 }
                 // Commands that require a library
-                "add" | "download" => Ok((command, true)),
+                "show" | "add" | "download" => Ok((command, true)),
                 // Commands that don't require a library
                 "list" => Ok((command, false)),
                 _ => Err("Unrecognized command. See 'help'".into()),
@@ -195,6 +195,7 @@ impl Config {
         };
 
         match config.command.as_str() {
+            "show" => {}
             "add" => config.parse_terms(args)?,
             "download" => {
                 // Override defaults with lib.conf, then with CLI options
@@ -233,6 +234,7 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
 
 pub fn run(config: Config) -> types::UnitResult {
     match config.command.as_str() {
+        "show" => info::show(&config),
         "add" => add::add(&config),
         "download" => download::download(&config),
         "list" => info::list(),

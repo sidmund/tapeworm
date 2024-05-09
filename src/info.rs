@@ -1,8 +1,45 @@
 //! Informational functions.
 
 use crate::types;
+use crate::Config;
 use std::fs;
 use std::path::PathBuf;
+
+/// Show the library's discovered config files.
+pub fn show(config: &Config) -> types::UnitResult {
+    if fs::metadata(&config.lib_path.clone().unwrap()).is_err() {
+        return Err(format!(
+            "Library not found: {}",
+            config.lib_path.clone().unwrap().to_str().unwrap()
+        )
+        .into());
+    }
+
+    println!("LIBRARY: {}", config.library.clone().unwrap());
+
+    if fs::metadata(&config.lib_conf_path.clone().unwrap()).is_ok() {
+        println!("  lib.conf [OK]");
+    } else {
+        println!("  lib.conf [NOT FOUND]");
+    }
+
+    if fs::metadata(&config.input_path.clone().unwrap()).is_ok() {
+        println!("  input.txt [OK]");
+        // TODO show number of inputs found
+    } else {
+        println!("  input.txt [NOT FOUND]");
+    }
+
+    if fs::metadata(&config.yt_dlp_conf_path.clone().unwrap()).is_ok() {
+        println!("  yt-dlp.conf [OK]");
+    } else {
+        println!("  yt-dlp.conf [NOT FOUND]");
+    }
+
+    // TODO open file explorer in lib dir?
+
+    Ok(())
+}
 
 /// Print the list of libraries discovered in the tapeworm config directory.
 pub fn list() -> types::UnitResult {
@@ -29,6 +66,9 @@ tapeworm - A scraper and downloader written in Rust
 COMMANDS
     help
         Show this help message
+
+    show LIBRARY
+        Show information about the LIBRARY
 
     list
         List all libraries
