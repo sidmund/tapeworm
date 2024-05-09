@@ -189,10 +189,43 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecStr
         }
         let target = target.unwrap().join(filename);
 
-        // Check if a file already exist at target location
-        if fs::metadata(&target).is_ok() {
-            println!("Overwriting existing file...");
-            // TODO prompt user if ok to overwrite?
+        if !overwrite(&target) {
+            println!("  Skipping {}", entry.display());
+            continue;
+        }
+
+        if fs::rename(entry.clone(), target.clone()).is_err() {
+            errors.push(format!(
+                "! {}\n    -> {}",
+                entry.display(),
+                target.display()
+            ));
+        } else {
+            println!("  {} -> {}", entry.display(), target.display());
+        }
+    }
+
+    if errors.is_empty() {
+        None
+    } else {
+        Some(errors)
+    }
+}
+
+/// Simply drop the `downloads` files directly in `target_dir`.
+fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecString {
+    println!("Dropping files into {}...", target_dir.display());
+
+    let mut errors = Vec::new();
+
+    for entry in downloads {
+        let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
+
+        let target = target_dir.join(filename);
+
+        if !overwrite(&target) {
+            println!("  Skipping {}", entry.display());
+            continue;
         }
 
         if fs::rename(entry.clone(), target.clone()).is_err() {
@@ -221,36 +254,15 @@ fn letter_for(s: &str) -> String {
     letter
 }
 
-/// Simply drop the `downloads` files directly in `target_dir`.
-fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecString {
-    println!("Dropping files into {}...", target_dir.display());
-
-    let mut errors = Vec::new();
-
-    for entry in downloads {
-        let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
-
-        let target = target_dir.join(filename);
-        // Check if a file already exist at target location
-        if fs::metadata(&target).is_ok() {
-            println!("Overwriting existing file...");
-            // TODO prompt user if ok to overwrite?
-        }
-
-        if fs::rename(entry.clone(), target.clone()).is_err() {
-            errors.push(format!(
-                "! {}\n    -> {}",
-                entry.display(),
-                target.display()
-            ));
-        } else {
-            println!("  {} -> {}", entry.display(), target.display());
+/// Checks if a file already exists at the `target` location,
+/// and asks the user whether to overwrite it.
+/// Returns true to overwrite, false otherwise.
+fn overwrite(target: &PathBuf) -> bool {
+    if fs::metadata(target).is_ok() {
+        let overwrite = util::confirm("The file already exists. Overwrite?", true);
+        if overwrite.is_err() || !overwrite.unwrap() {
+            return false;
         }
     }
-
-    if errors.is_empty() {
-        None
-    } else {
-        Some(errors)
-    }
+    true
 }
