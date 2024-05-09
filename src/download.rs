@@ -134,10 +134,7 @@ fn deposit(config: &Config) -> types::UnitResult {
         return Err(format!(
             "Could not move {} files to target directory:{}",
             errors.len(),
-            errors
-                .iter()
-                .map(|(e, t)| format!("! {}\n    -> {}", e.display(), t.display()))
-                .fold(String::new(), |a, b| a + "\n" + &b)
+            errors.iter().fold(String::new(), |a, b| a + "\n" + &b)
         )
         .into());
     }
@@ -154,7 +151,7 @@ fn deposit(config: &Config) -> types::UnitResult {
 /// - `Song.mp3 with artist tag 'Band'`        -> `target_dir/B/Band/Song.mp3`
 /// - `Band - Song.mp3 with artist tag 'Band'` -> `target_dir/B/Band/Band - Song.mp3`
 /// - `Band - Song.mp3 without artist tag`     -> `target_dir/B/Band - Song.mp3`
-fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecPathBuf {
+fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecString {
     println!("Sorting files into {}...", target_dir.display());
 
     let mut errors = Vec::new();
@@ -180,8 +177,18 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecPat
             target_dir.join(letter_for(&filename))
         };
 
-        // TODO instead of unwrap, add a "Couldnt create dir" message to errors
-        let target = util::guarantee_dir_path(target).unwrap().join(filename);
+        let target_path = target.clone();
+        let target = util::guarantee_dir_path(target);
+        if target.is_err() {
+            errors.push(format!(
+                "! Could not create target dir: {}\n    {}",
+                target_path.display(),
+                target.unwrap_err()
+            ));
+            continue;
+        }
+        let target = target.unwrap().join(filename);
+
         // Check if a file already exist at target location
         if fs::metadata(&target).is_ok() {
             println!("Overwriting existing file...");
@@ -189,7 +196,11 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecPat
         }
 
         if fs::rename(entry.clone(), target.clone()).is_err() {
-            errors.push((entry, target));
+            errors.push(format!(
+                "! {}\n    -> {}",
+                entry.display(),
+                target.display()
+            ));
         } else {
             println!("  {} -> {}", entry.display(), target.display());
         }
@@ -211,7 +222,7 @@ fn letter_for(s: &str) -> String {
 }
 
 /// Simply drop the `downloads` files directly in `target_dir`.
-fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecPathBuf {
+fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecString {
     println!("Dropping files into {}...", target_dir.display());
 
     let mut errors = Vec::new();
@@ -227,7 +238,11 @@ fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecPathBuf
         }
 
         if fs::rename(entry.clone(), target.clone()).is_err() {
-            errors.push((entry, target));
+            errors.push(format!(
+                "! {}\n    -> {}",
+                entry.display(),
+                target.display()
+            ));
         } else {
             println!("  {} -> {}", entry.display(), target.display());
         }
