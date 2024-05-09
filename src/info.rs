@@ -4,6 +4,7 @@ use crate::types;
 use std::fs;
 use std::path::PathBuf;
 
+/// Print the list of libraries discovered in the tapeworm config directory.
 pub fn list() -> types::UnitResult {
     let conf_path = PathBuf::from(dirs::config_dir().unwrap()).join("tapeworm");
     let libraries = fs::read_dir(&conf_path);
@@ -11,12 +12,11 @@ pub fn list() -> types::UnitResult {
         return Ok(()); // No need to fail when no libraries are present
     }
 
-    for library in libraries.unwrap() {
-        let library = library?;
-        if library.path().is_dir() {
-            println!("{}", library.file_name().to_str().unwrap());
-        }
-    }
+    libraries
+        .unwrap()
+        .map(|l| l.unwrap())
+        .filter(|l| l.path().is_dir())
+        .for_each(|l| println!("{}", l.file_name().to_str().unwrap()));
 
     Ok(())
 }
