@@ -110,7 +110,7 @@ impl Config {
             .collect();
 
         for line in options {
-            if line.starts_with("#") {
+            if line.is_empty() || line.starts_with("#") {
                 continue;
             }
 
