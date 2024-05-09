@@ -51,6 +51,9 @@ pub fn guarantee_dir_path(dir: PathBuf) -> types::PathBufResult {
     Ok(dir)
 }
 
+/// # Returns
+/// - `Err`: if the `dir` path does not exist
+/// - `Vec<PathBuf>`: a list of files present, may be empty
 pub fn filepaths_in(dir: PathBuf) -> types::VecPathBufResult {
     Ok(fs::read_dir(dir)?
         .filter(|e| {
