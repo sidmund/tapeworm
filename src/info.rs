@@ -56,7 +56,11 @@ DOWNLOAD OPTIONS
     Setting a CLI option will override its value in the lib.conf file, if present.
 
     -c      Clear the input file after scraping
+    -d      Deposit downloaded files in organized subfolders of TARGET_DIR, requires -o
+    -o      Set the TARGET_DIR, requires -y
+    -t      Enable tagging, requires -y
     -v      Verbosely show what is being processed
+    -y      Set the YT_DLP_OUTPUT_DIR, required by -o and -t
 
 EXAMPLE
     # Create the library by recording the first query

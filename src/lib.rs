@@ -142,10 +142,13 @@ impl Config {
             }
 
             for s in arg[1..].chars() {
-                // TODO add support for tagging/depositing here
                 match s {
                     'c' => self.clear_input = true,
+                    'd' => self.deposit_az = true,
+                    'o' => self.target_dir = args.next().map(PathBuf::from),
+                    't' => self.enable_tagging = true,
                     'v' => self.verbose = true,
+                    'y' => self.yt_dlp_output_dir = args.next().map(PathBuf::from),
                     _ => return Err("Unrecognized option. See 'help'".into()),
                 };
             }
