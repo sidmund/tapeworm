@@ -65,28 +65,12 @@ pub fn filepaths_in(dir: PathBuf) -> types::VecPathBufResult {
 }
 
 /// Remove a string in its entirety from another string.
-///
-// TODO fix doc test
-// ```
-// let input = String::from("Lorem ipsum dolor sic amet.");
-// assert_eq!(
-//     util::remove_str_from_string(input, "dolor"),
-//     "Lorem ipsum  sic amet."
-// );
-// ```
 pub fn remove_str_from_string(s: String, to_remove: &str) -> String {
     let without = s.split(to_remove).fold(String::new(), |acc, s| acc + s);
     String::from(without.trim())
 }
 
-/// Remove leading and trailing brackets
-// TODO fix doc test
-// ```
-// assert_eq!(util::remove_brackets("(official video)"), "official video");
-// assert_eq!(util::remove_brackets("[hard remix]"), "hard remix");
-// assert_eq!(util::remove_brackets("{instrumental}"), "instrumental");
-// assert_eq!(util::remove_brackets("<remix>"), "remix");
-// ```
+/// Remove leading and trailing brackets.
 pub fn remove_brackets(s: &str) -> String {
     let s = s.trim();
     let mut result = String::from(s);
@@ -97,4 +81,26 @@ pub fn remove_brackets(s: &str) -> String {
         result.pop();
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_remove_brackets() {
+        assert_eq!(remove_brackets("(official video)"), "official video");
+        assert_eq!(remove_brackets("[hard remix]"), "hard remix");
+        assert_eq!(remove_brackets("{instrumental}"), "instrumental");
+        assert_eq!(remove_brackets("<remix>"), "remix");
+    }
+
+    #[test]
+    fn test_remove_str_from_string() {
+        let input = String::from("Lorem ipsum dolor sic amet.");
+        assert_eq!(
+            remove_str_from_string(input, "dolor"),
+            "Lorem ipsum  sic amet."
+        );
+    }
 }
