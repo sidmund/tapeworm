@@ -15,10 +15,8 @@ use std::path::PathBuf;
 /// Titles generally contain extra information, e.g. "Artist ft. Band - Song (2024) [Remix]"
 /// Information such as collaborating artists, year, remix, etc. are extracted.
 pub fn tag(config: &Config) -> types::UnitResult {
-    if !config.enable_tagging {
-        return Ok(());
-    } else if config.yt_dlp_output_dir.is_none() {
-        return Err("'YT_DLP_OUTPUT_DIR' must be set when tagging is enabled. See 'help'".into());
+    if config.yt_dlp_output_dir.is_none() {
+        return Err("'YT_DLP_OUTPUT_DIR' must be set. See 'help'".into());
     }
 
     println!("\nTAGGING FILES...");

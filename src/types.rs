@@ -9,7 +9,6 @@ pub type HashSetResult = Result<HashSet<String>, Box<dyn Error>>;
 pub type OptionBoolResult = Result<Option<bool>, Box<dyn Error>>;
 pub type OptionVecString = Option<Vec<String>>;
 pub type PathBufResult = Result<PathBuf, Box<dyn Error>>;
-pub type StringBoolResult = Result<(String, bool), Box<dyn Error>>;
 pub type StringResult = Result<String, Box<dyn Error>>;
 pub type UnitResult = Result<(), Box<dyn Error>>;
 pub type VecPathBufResult = Result<Vec<PathBuf>, Box<dyn Error>>;
