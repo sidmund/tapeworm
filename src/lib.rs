@@ -36,22 +36,24 @@ pub struct Config {
     // Depositing
     pub deposit_az: bool,
     pub target_dir: Option<PathBuf>,
+
+    // Processing
+    pub steps: Option<Vec<String>>,
 }
 
 impl Config {
     fn parse_command(command: Option<String>) -> types::StringResult {
         if let Some(command) = command {
-            return match command.as_str() {
+            match command.as_str() {
                 "help" | "h" | "-h" | "--help" => {
                     info::help();
                     process::exit(0);
                 }
-                "list" | "show" | "add" | "download" | "tag" | "deposit" => Ok(command),
-                _ => Err("Unrecognized command. See 'help'".into()),
-            };
+                _ => Ok(command),
+            }
+        } else {
+            Err("Command not specified. See 'help'".into())
         }
-
-        Err("Command not specified. See 'help'".into())
     }
 
     fn parse_library(library: Option<String>) -> types::StringResult {
@@ -60,6 +62,26 @@ impl Config {
         } else {
             Err("Library not specified. See 'help'".into())
         }
+    }
+
+    fn setup_library_paths(&mut self) {
+        let lib_path = PathBuf::from(dirs::config_dir().unwrap())
+            .join("tapeworm")
+            .join(self.library.clone().unwrap());
+
+        let mut lib_conf_path = lib_path.join("lib");
+        lib_conf_path.set_extension("conf");
+
+        let mut input_path = lib_path.join("input");
+        input_path.set_extension("txt");
+
+        let mut yt_dlp_conf_path = lib_path.join("yt-dlp");
+        yt_dlp_conf_path.set_extension("conf");
+
+        self.lib_path = Some(lib_path);
+        self.lib_conf_path = Some(lib_conf_path);
+        self.input_path = Some(input_path);
+        self.yt_dlp_conf_path = Some(yt_dlp_conf_path);
     }
 
     fn parse_terms(&mut self, mut args: impl Iterator<Item = String>) -> types::UnitResult {
@@ -102,7 +124,7 @@ impl Config {
     /// - If a line does not follow the `option=value` format
     /// - If an option is not recognized
     fn build_lib_conf_options(&mut self) -> types::UnitResult {
-        let contents = fs::read_to_string(&self.lib_path.clone().unwrap());
+        let contents = fs::read_to_string(&self.lib_conf_path.clone().unwrap());
         if contents.is_err() {
             return Ok(()); // Leave defaults when file not present
         }
@@ -123,6 +145,8 @@ impl Config {
                     // Deposit
                     "target_dir" => self.target_dir = Some(PathBuf::from(value)),
                     "deposit_az" => self.deposit_az = value.parse::<bool>()?,
+                    // Process
+                    "steps" => self.steps = Some(value.split(',').map(String::from).collect()),
                     _ => return Err(format!("Invalid config option: {}", key).into()),
                 }
             } else {
@@ -143,49 +167,40 @@ impl Config {
                 break; // no (more) options
             }
 
-            for s in arg[1..].chars() {
-                match s {
+            for c in arg[1..].chars() {
+                match c {
                     'v' => self.verbose = true,
-                    'c' if self.command == "download" => self.clear_input = true,
-                    'y' if self.command == "tag" || self.command == "deposit" => {
+                    'c' if self.command == "download" || self.command == "process" => {
+                        self.clear_input = true
+                    }
+                    'y' if self.command == "tag"
+                        || self.command == "deposit"
+                        || self.command == "process" =>
+                    {
                         self.yt_dlp_output_dir = args.next().map(PathBuf::from)
                     }
-                    'd' if self.command == "deposit" => self.deposit_az = true,
-                    'o' if self.command == "deposit" => {
+                    'd' if self.command == "deposit" || self.command == "process" => {
+                        self.deposit_az = true
+                    }
+                    'o' if self.command == "deposit" || self.command == "process" => {
                         self.target_dir = args.next().map(PathBuf::from)
+                    }
+                    's' if self.command == "process" => {
+                        self.steps =
+                            Some(args.next().unwrap().split(',').map(String::from).collect())
                     }
                     _ => {
                         return Err(format!(
                             "Unrecognized option '{}' for command '{}'. See 'help'",
-                            s, self.command
+                            c, self.command
                         )
                         .into())
                     }
-                };
+                }
             }
         }
 
         Ok(())
-    }
-
-    fn setup_library_paths(&mut self) {
-        let lib_path = PathBuf::from(dirs::config_dir().unwrap())
-            .join("tapeworm")
-            .join(self.library.clone().unwrap());
-
-        let mut lib_conf_path = lib_path.join("lib");
-        lib_conf_path.set_extension("conf");
-
-        let mut input_path = lib_path.join("input");
-        input_path.set_extension("txt");
-
-        let mut yt_dlp_conf_path = lib_path.join("yt-dlp");
-        yt_dlp_conf_path.set_extension("conf");
-
-        self.lib_path = Some(lib_path);
-        self.lib_conf_path = Some(lib_conf_path);
-        self.input_path = Some(input_path);
-        self.yt_dlp_conf_path = Some(yt_dlp_conf_path);
     }
 
     pub fn build(mut args: impl Iterator<Item = String>) -> types::ConfigResult {
@@ -199,7 +214,7 @@ impl Config {
         };
 
         // Commands that require a library
-        if ["show", "download", "tag", "deposit"].contains(&config.command.as_str()) {
+        if ["show", "download", "tag", "deposit", "process"].contains(&config.command.as_str()) {
             config.library = Some(Config::parse_library(args.next())?);
             config.setup_library_paths();
         }
@@ -207,7 +222,7 @@ impl Config {
         // Parse extra options for commands that have them
         if config.command == "add" {
             config.parse_terms(args)?;
-        } else if ["download", "tag", "deposit"].contains(&config.command.as_str()) {
+        } else if ["download", "tag", "deposit", "process"].contains(&config.command.as_str()) {
             // Commands that use options from lib.conf / CLI
             config.build_lib_conf_options()?; // override defaults with lib.conf
             config.parse_cli_options(args)?; // override defaults/lib.conf with CLI
@@ -216,37 +231,40 @@ impl Config {
         Ok(config)
     }
 
-    /// Returns:
-    /// - Some(true) if yt-dlp.conf exists, it will be used
-    /// - Some(false) if the user wants to continue without yt-dlp.conf
-    /// - None if the user wants to abort
-    fn yt_dlp_conf_exists(&self) -> types::OptionBoolResult {
-        if fs::metadata(&self.yt_dlp_conf_path.clone().unwrap()).is_ok() {
-            return Ok(Some(true));
+    fn steps(&self) -> Result<Vec<&String>, Box<dyn std::error::Error>> {
+        if self.command.as_str() != "process" {
+            return Ok(vec![&self.command]);
         }
 
-        println!(
-            "Warning: {} not found
-If you continue, yt-dlp will be invoked without any options, which will yield inconsistent results.",
-            self.yt_dlp_conf_path.clone().unwrap().to_str().unwrap()
-        );
-
-        if util::confirm("Do you want to continue regardless?", false)? {
-            Ok(Some(false))
-        } else {
-            Ok(None)
+        if let Some(steps) = &self.steps {
+            let mut commands = Vec::new();
+            for step in steps {
+                if step == "add" {
+                    return Err(
+                        "Command 'add' not supported as a processing step. See 'help'".into(),
+                    );
+                }
+                commands.push(step);
+            }
+            return Ok(commands);
         }
+
+        Err("No processing steps specified. See 'help'".into())
     }
 }
 
 pub fn run(config: Config) -> types::UnitResult {
-    match config.command.as_str() {
-        "list" => info::list(),
-        "show" => info::show(&config),
-        "add" => add::add(&config),
-        "download" => download::download(&config),
-        "tag" => tag::tag(&config),
-        "deposit" => organize::deposit(&config),
-        _ => Ok(()),
+    for command in &config.steps()? {
+        match command.as_str() {
+            "list" => info::list()?,
+            "show" => info::show(&config)?,
+            "add" => add::add(&config)?,
+            "download" => download::download(&config)?,
+            "tag" => tag::tag(&config)?,
+            "deposit" => organize::deposit(&config)?,
+            _ => return Err("Unrecognized command. See 'help'".into()),
+        }
     }
+
+    Ok(())
 }

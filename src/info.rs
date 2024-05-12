@@ -110,6 +110,13 @@ COMMANDS
         -o      Set the TARGET_DIR, requires -y
         -y      Set the YT_DLP_OUTPUT_DIR, required if not set in lib.conf
 
+    process LIBRARY [OPTIONS]
+        Process LIBRARY as specified by `STEPS`. Any options from `download`, `tag`, `deposit` are valid here
+
+        OPTIONS
+        -s      Set the processing steps (commands) to run on the library as a
+                comma-separated list, required if not set in lib.conf
+
 GENERAL OPTIONS
     The options from ~/.config/tapeworm/LIBRARY/lib.conf are loaded first.
     Setting a CLI option will override its value in the lib.conf file, if present.
@@ -127,6 +134,9 @@ EXAMPLE
     tapeworm download LIBRARY
     tapeworm tag LIBRARY
     tapeworm deposit LIBRARY -d
+
+    # Alternatively, using process steps
+    tapeworm process LIBRARY -s download,tag,deposit -d
 "
     );
 }

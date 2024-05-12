@@ -19,11 +19,9 @@ pub fn tag(config: &Config) -> types::UnitResult {
         return Err("'YT_DLP_OUTPUT_DIR' must be set. See 'help'".into());
     }
 
-    println!("\nTAGGING FILES...");
-
     let downloads = PathBuf::from(config.lib_path.clone().unwrap())
         .join(config.yt_dlp_output_dir.clone().unwrap());
-    let downloads: Vec<PathBuf> = util::filepaths_in(downloads)?;
+    let downloads: Vec<PathBuf> = util::filepaths_in(downloads).unwrap_or(vec![]);
     let total = downloads.len();
 
     for (i, entry) in downloads.iter().enumerate() {

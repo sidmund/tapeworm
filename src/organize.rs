@@ -15,7 +15,7 @@ use std::path::PathBuf;
 /// If DEPOSIT_AZ is enabled, files will be moved to organized subdirectories of TARGET_DIR.
 pub fn deposit(config: &Config) -> types::UnitResult {
     if config.target_dir.is_none() {
-        return Ok(());
+        return Err("'TARGET_DIR' must be set for moving downloads. See 'help'".into());
     } else if config.yt_dlp_output_dir.is_none() {
         return Err(
             "'YT_DLP_OUTPUT_DIR' must be set for moving downloads to 'TARGET_DIR'. See 'help'"
@@ -23,17 +23,16 @@ pub fn deposit(config: &Config) -> types::UnitResult {
         );
     }
 
-    let target_dir =
-        PathBuf::from(config.lib_path.clone().unwrap()).join(config.target_dir.clone().unwrap());
-    let target_dir = util::guarantee_dir_path(target_dir)?;
-
     let downloads = PathBuf::from(config.lib_path.clone().unwrap())
         .join(config.yt_dlp_output_dir.clone().unwrap());
-    let downloads: Vec<PathBuf> = util::filepaths_in(downloads)?;
-
+    let downloads: Vec<PathBuf> = util::filepaths_in(downloads).unwrap_or(vec![]);
     if downloads.is_empty() {
         return Ok(());
     }
+
+    let target_dir =
+        PathBuf::from(config.lib_path.clone().unwrap()).join(config.target_dir.clone().unwrap());
+    let target_dir = util::guarantee_dir_path(target_dir)?;
 
     if let Some(errors) = if config.deposit_az {
         organize(target_dir, downloads)
