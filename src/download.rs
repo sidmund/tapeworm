@@ -1,7 +1,5 @@
 //! Download all inputs in the library.
 
-use crate::organize;
-use crate::tag;
 use crate::types;
 use crate::Config;
 use std::collections::HashSet;
@@ -10,12 +8,6 @@ use std::io::{BufRead, BufReader, ErrorKind};
 use std::process::{Command, Stdio};
 
 pub fn download(config: &Config) -> types::UnitResult {
-    download_inputs(&config)?;
-    tag::tag(&config)?;
-    organize::deposit(&config)
-}
-
-fn download_inputs(config: &Config) -> types::UnitResult {
     if fs::metadata(&config.lib_path.clone().unwrap()).is_err() {
         return Err(format!(
             "Library not found: {}",
