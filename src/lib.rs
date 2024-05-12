@@ -1,6 +1,7 @@
 mod add;
 mod download;
 mod info;
+mod organize;
 mod scrape;
 mod tag;
 mod types;
