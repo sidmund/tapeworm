@@ -1,17 +1,21 @@
 # tapeworm
 
-tapeworm is a scraper and downloader written in Rust. It uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) and can download whatever yt-dlp can download. tapeworm is not just a wrapper for yt-dlp, but sets itself apart with the features:
+tapeworm is a media file processor written in Rust. Its features are:
 
 - Scrape websites for URLs or queries, see [supported websites](#supported-websites-for-scraping)
 - Download (scraped) URLs and queries
 - Manage different yt-dlp configurations
+- Extract additional tags from the `title` tag (only for music/video)
+- Organize downloaded/tagged files into directories
+
+tapeworm uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) for downloading and can download whatever yt-dlp can download.
 
 ## Is this for you?
 
 If you just need to download URL(s), use yt-dlp. yt-dlp has options for specifying an input file and configuration files. yt-dlp also works with queries like `yt-dlp ytsearch:"query"`. If that is not enough and you need some of the following features, tapeworm is for you:
 
 - You want to obtain URLs/queries from sites not supported by yt-dlp, e.g. yt-dlp cannot download from Spotify; but tapeworm can scrape Spotify for song information and will download the songs using `ytsearch` queries
-- You want a single application to both store URLs and for downloading them
+- You want a single application to store URLs, to download them, to tag them, and to organize them
 - You want to setup different download options for different sets of input URLs, and be able to easily configure and invoke them. E.g. you have a music and a video library and want a single application to easily download sources for them with the right options
 - You like the abstraction tapeworm provides by never having to specify the config file yourself, or worrying about what file to store URLs in, as this can all be done with simple tapeworm commands
 
@@ -29,16 +33,19 @@ cargo build --release
 
 ## Usage
 
-tapeworm works with "libraries". A library is a URL/query collection managed by tapeworm. For example, this is the minimum setup and usage:
+tapeworm works with "libraries". A library specifies a.o. what files to download, how to download them, and how to process them. Commonly, libraries are used for downloading music/video. However, you can also use libraries just for tagging files, or organizing them; and skip the download functionality altogether.
+
+Minimal example setup and usage when you want to use tapeworm for downloading:
 
 ```sh
 # Create the library by recording the first query
-tapeworm add LIBRARY the artist - a song # records "the artist - a song"
-# Add a URL
-tapeworm add LIBRARY https://youtube.com/watch?v=123
-# Scrape/download all
+tapeworm add LIBRARY the artist - a song # records 'ytsearch:"the artist - a song"'
+tapeworm add LIBRARY https://youtube.com/watch?v=123 # records the URL
+
+# Download all URLs/queries
 tapeworm download LIBRARY
-# Optional steps
+
+# Optionally, tag and deposit the downloaded files
 tapeworm tag LIBRARY # extract more tags from "title"
 tapeworm deposit LIBRARY # organize into a target folder
 ```
@@ -47,9 +54,16 @@ If you add a URL from a [scraping supported site](#supported-websites-for-scrapi
 
 Downloading the library will first download each input (whether URL or query), and may then process the downloaded files further, e.g. tagging audio files.
 
-The behavior of the `download` command and subsequent processing is determined by the library configuration.
+If you want to use tapeworm merely for tagging and/or organizing files, see the following minimal example setup and usage:
+
+```sh
+tapeworm tag LIBRARY # `YT_DLP_OUTPUT_DIR` should be set, and have some files in it
+tapeworm deposit LIBRARY # Both `YT_DLP_OUTPUT_DIR` and `TARGET_DIR` should be set
+```
 
 ### Configuration
+
+The library configuration determines the behavior of each tapeworm command.
 
 The config directory shall refer to one of the following paths (depending on your system):
 
@@ -62,19 +76,21 @@ tapeworm will try to find the following files in this directory:
 - **input.txt**: search queries and/or URLs
 - **yt-dlp.conf**: yt-dlp options
 
-Removing the `tapeworm/LIBRARY` folder is all that is needed to remove the library. **Caution:** if you also downloaded files here, you might not want to delete those.
+Note that **input.txt** and **yt-dlp.conf** are only needed if you intend to use the library for downloading.
+
+Removing the `tapeworm/LIBRARY` folder is all that is needed to remove the library from tapeworm's control. **Caution:** if you also downloaded files here, you might not want to delete those.
 
 #### lib.conf
 
 This specifies library settings, in newline-separated `name=value` pairs. If this file is not present, these defaults are used:
 
-| Setting name | Default value | Description |
-|:-|:-|:-|
-| CLEAR_INPUT | false | Clear input.txt after downloading |
-| DEPOSIT_AZ | false | If `TARGET_DIR` is set, enabling this will make it move files into alphabetic subdirectories of the target folder, instead of immediately in the target folder. See the example below. |
-| TARGET_DIR | | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `YT_DLP_OUTPUT_DIR` to be set. |
-| VERBOSE | false | Show verbose output |
-| YT_DLP_OUTPUT_DIR | | The folder where yt-dlp puts its downloads. Either a LIBRARY-relative path or an absolute path. Any file in this folder will be tagged, and possibly moved to `TARGET_DIR`. **Required** for tagging and when using `TARGET_DIR`. |
+| Setting name | Default value | Command | Description |
+|:-|:-|:-|:-|
+| CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
+| DEPOSIT_AZ | false | `deposit` | If `TARGET_DIR` is set, enabling this will make it move files into alphabetic subdirectories of the target folder, instead of immediately in the target folder. See the example below. |
+| TARGET_DIR | | `deposit` | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `YT_DLP_OUTPUT_DIR` to be set. |
+| VERBOSE | false | any | Show verbose output |
+| YT_DLP_OUTPUT_DIR | | `tag`, `deposit` | The folder where yt-dlp puts its downloads. Either a LIBRARY-relative path or an absolute path. Any file in this folder will be tagged, and possibly moved to `TARGET_DIR`. **Required** for tagging and when using `TARGET_DIR`. |
 
 How `DEPOSIT_AZ` works:
 
@@ -119,7 +135,7 @@ yt-dlp [URL...]
 
 Note that files are downloaded to the directory where `tapeworm` was invoked, *unless* yt-dlp.conf specifies differently in e.g. the `-P` or `-o` option.
 
-Also note that if you want to use the tagging feature, the `YT_DLP_OUTPUT_DIR` in `lib.conf` should match the path where yt-dlp downloads to.
+Also note that if you want to use the tagging/depositing feature, the `YT_DLP_OUTPUT_DIR` in `lib.conf` should match the path where yt-dlp downloads to.
 
 ### Examples
 
@@ -149,9 +165,9 @@ echo "TARGET_DIR=/home/<user_name>/Music" >> lib.conf
 tapeworm add music https://youtube.com/watch?v=123
 tapeworm add music the artist - a song
 
-# Find URLs, download, and tag
 tapeworm download music
 tapeworm tag music
+tapeworm deposit music # to move them into TARGET_DIR
 ```
 For tagging to work, the following yt-dlp.conf setup is required:
 ```
@@ -189,5 +205,5 @@ Note that if you have metadata options in `yt-dlp.conf` these are always applied
 
 The following websites can currently be scraped:
 
-- Spotify playlist
+- Spotify playlists
 
