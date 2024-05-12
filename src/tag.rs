@@ -149,12 +149,14 @@ pub fn tag(config: &Config) -> types::UnitResult {
 
         if util::confirm("Accept these changes?", true)? {
             // Write tags
-            if let Some(artist) = artist {
+            if let Some(artist) = artist.clone() {
                 entry_tag.set_artist(&artist);
-                entry_tag.set_album_artist(&artist);
             }
             if let Some(album) = album {
                 entry_tag.set_album_title(album.as_str());
+                if let Some(artist) = artist {
+                    entry_tag.set_album_artist(&artist);
+                }
             }
             if let Some(title) = title {
                 entry_tag.set_title(title.as_str());
