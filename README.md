@@ -88,6 +88,7 @@ This specifies library settings, in newline-separated `name=value` pairs. If thi
 |:-|:-|:-|:-|
 | CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
 | DEPOSIT_AZ | false | `deposit` | If `TARGET_DIR` is set, enabling this will make it move files into alphabetic subdirectories of the target folder, instead of immediately in the target folder. See the example below. |
+| STEPS | | `process` | A comma-separated list of commands (`process` and `add` excluded). This is a convenience option, see the music library example |
 | TARGET_DIR | | `deposit` | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `YT_DLP_OUTPUT_DIR` to be set. |
 | VERBOSE | false | any | Show verbose output |
 | YT_DLP_OUTPUT_DIR | | `tag`, `deposit` | The folder where yt-dlp puts its downloads. Either a LIBRARY-relative path or an absolute path. Any file in this folder will be tagged, and possibly moved to `TARGET_DIR`. **Required** for tagging and when using `TARGET_DIR`. |
@@ -168,6 +169,10 @@ tapeworm add music the artist - a song
 tapeworm download music
 tapeworm tag music
 tapeworm deposit music # to move them into TARGET_DIR
+
+# Alternative for the above 3 commands
+echo "STEPS=download,tag,deposit" >> lib.conf
+tapeworm process music
 ```
 For tagging to work, the following yt-dlp.conf setup is required:
 ```

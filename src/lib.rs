@@ -239,10 +239,12 @@ impl Config {
         if let Some(steps) = &self.steps {
             let mut commands = Vec::new();
             for step in steps {
-                if step == "add" {
-                    return Err(
-                        "Command 'add' not supported as a processing step. See 'help'".into(),
-                    );
+                if step == "add" || step == "process" {
+                    return Err(format!(
+                        "Command '{}' not supported as a processing step. See 'help'",
+                        step
+                    )
+                    .into());
                 }
                 commands.push(step);
             }
