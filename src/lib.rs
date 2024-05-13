@@ -31,7 +31,7 @@ pub struct Config {
     pub yt_dlp_conf_path: Option<PathBuf>,
 
     // Tagging
-    pub yt_dlp_output_dir: Option<PathBuf>,
+    pub input_dir: Option<PathBuf>,
 
     // Depositing
     pub deposit_az: bool,
@@ -141,7 +141,7 @@ impl Config {
                     // Download
                     "clear_input" => self.clear_input = value.parse::<bool>()?,
                     // Tag, Deposit
-                    "yt_dlp_output_dir" => self.yt_dlp_output_dir = Some(PathBuf::from(value)),
+                    "input_dir" => self.input_dir = Some(PathBuf::from(value)),
                     // Deposit
                     "target_dir" => self.target_dir = Some(PathBuf::from(value)),
                     "deposit_az" => self.deposit_az = value.parse::<bool>()?,
@@ -173,11 +173,11 @@ impl Config {
                     'c' if self.command == "download" || self.command == "process" => {
                         self.clear_input = true
                     }
-                    'y' if self.command == "tag"
+                    'i' if self.command == "tag"
                         || self.command == "deposit"
                         || self.command == "process" =>
                     {
-                        self.yt_dlp_output_dir = args.next().map(PathBuf::from)
+                        self.input_dir = args.next().map(PathBuf::from)
                     }
                     'd' if self.command == "deposit" || self.command == "process" => {
                         self.deposit_az = true

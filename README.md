@@ -57,8 +57,8 @@ Downloading the library will first download each input (whether URL or query), a
 If you want to use tapeworm merely for tagging and/or organizing files, see the following minimal example setup and usage:
 
 ```sh
-tapeworm tag LIBRARY # `YT_DLP_OUTPUT_DIR` should be set, and have some files in it
-tapeworm deposit LIBRARY # Both `YT_DLP_OUTPUT_DIR` and `TARGET_DIR` should be set
+tapeworm tag LIBRARY # `INPUT_DIR` should be set, and have some files in it
+tapeworm deposit LIBRARY # Both `INPUT_DIR` and `TARGET_DIR` should be set
 ```
 
 ### Configuration
@@ -88,10 +88,10 @@ This specifies library settings, in newline-separated `name=value` pairs. If thi
 |:-|:-|:-|:-|
 | CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
 | DEPOSIT_AZ | false | `deposit` | If `TARGET_DIR` is set, enabling this will make it move files into alphabetic subdirectories of the target folder, instead of immediately in the target folder. See the example below. |
+| INPUT_DIR | | `tag`, `deposit` | The folder where the `tag` and `deposit` commands take their inputs from. If you use the `download` command, you'll generally want yt-dlp to put its downloads into this folder, so they can be processed further. The folder is either a LIBRARY-relative path or an absolute path. **Required** for `tag` and `deposit` commands. |
 | STEPS | | `process` | A comma-separated list of commands (`process` and `add` excluded). This is a convenience option, see the music library example |
-| TARGET_DIR | | `deposit` | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `YT_DLP_OUTPUT_DIR` to be set. |
+| TARGET_DIR | | `deposit` | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `INPUT_DIR` to be set. |
 | VERBOSE | false | any | Show verbose output |
-| YT_DLP_OUTPUT_DIR | | `tag`, `deposit` | The folder where yt-dlp puts its downloads. Either a LIBRARY-relative path or an absolute path. Any file in this folder will be tagged, and possibly moved to `TARGET_DIR`. **Required** for tagging and when using `TARGET_DIR`. |
 
 How `DEPOSIT_AZ` works:
 
@@ -136,7 +136,7 @@ yt-dlp [URL...]
 
 Note that files are downloaded to the directory where `tapeworm` was invoked, *unless* yt-dlp.conf specifies differently in e.g. the `-P` or `-o` option.
 
-Also note that if you want to use the tagging/depositing feature, the `YT_DLP_OUTPUT_DIR` in `lib.conf` should match the path where yt-dlp downloads to.
+Also note that if you want to use the tagging/depositing feature, the `INPUT_DIR` in `lib.conf` should match the path where yt-dlp downloads to.
 
 ### Examples
 
@@ -160,7 +160,7 @@ Setup music library with tagging. The Music folder only contains properly proces
 mkdir ~/.config/tapeworm/music
 cd ~/.config/tapeworm/music
 echo "CLEAR_INPUT=true" >> lib.conf # empty input.txt when done
-echo "YT_DLP_OUTPUT_DIR=tmp" >> lib.conf
+echo "INPUT_DIR=tmp" >> lib.conf
 echo "TARGET_DIR=/home/<user_name>/Music" >> lib.conf
 
 tapeworm add music https://youtube.com/watch?v=123
@@ -204,7 +204,7 @@ You can also use tapeworm without the downloading/tagging features, and exploit 
 ```sh
 mkdir pics
 echo "STEPS=deposit" >> lib.conf
-echo "YT_DLP_OUTPUT_DIR=tmp" >> lib.conf # dir to put images in
+echo "INPUT_DIR=tmp" >> lib.conf # dir to put images in
 echo "TARGET_DIR=/home/USER/Pictures" >> lib.conf # dir to sort images into
 echo "DEPOSIT_AZ=true" >> lib.conf
 

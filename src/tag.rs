@@ -15,12 +15,12 @@ use std::path::PathBuf;
 /// Titles generally contain extra information, e.g. "Artist ft. Band - Song (2024) [Remix]"
 /// Information such as collaborating artists, year, remix, etc. are extracted.
 pub fn tag(config: &Config) -> types::UnitResult {
-    if config.yt_dlp_output_dir.is_none() {
-        return Err("'YT_DLP_OUTPUT_DIR' must be set. See 'help'".into());
+    if config.input_dir.is_none() {
+        return Err("'INPUT_DIR' must be set. See 'help'".into());
     }
 
-    let downloads = PathBuf::from(config.lib_path.clone().unwrap())
-        .join(config.yt_dlp_output_dir.clone().unwrap());
+    let downloads =
+        PathBuf::from(config.lib_path.clone().unwrap()).join(config.input_dir.clone().unwrap());
     let downloads: Vec<PathBuf> = util::filepaths_in(downloads).unwrap_or(vec![]);
     let total = downloads.len();
 

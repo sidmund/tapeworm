@@ -7,7 +7,7 @@ use audiotags::Tag;
 use std::fs;
 use std::path::PathBuf;
 
-/// Attempt to move all downloaded (and processed) files in YT_DLP_OUTPUT_DIR to TARGET_DIR.
+/// Attempt to move all downloaded (and processed) files in INPUT_DIR to TARGET_DIR.
 /// TARGET_DIR is created if not present.
 /// Directories are not moved, only files.
 /// If a file already exists in TARGET_DIR, it will be overwritten.
@@ -16,15 +16,14 @@ use std::path::PathBuf;
 pub fn deposit(config: &Config) -> types::UnitResult {
     if config.target_dir.is_none() {
         return Err("'TARGET_DIR' must be set for moving downloads. See 'help'".into());
-    } else if config.yt_dlp_output_dir.is_none() {
+    } else if config.input_dir.is_none() {
         return Err(
-            "'YT_DLP_OUTPUT_DIR' must be set for moving downloads to 'TARGET_DIR'. See 'help'"
-                .into(),
+            "'INPUT_DIR' must be set for moving downloads to 'TARGET_DIR'. See 'help'".into(),
         );
     }
 
-    let downloads = PathBuf::from(config.lib_path.clone().unwrap())
-        .join(config.yt_dlp_output_dir.clone().unwrap());
+    let downloads =
+        PathBuf::from(config.lib_path.clone().unwrap()).join(config.input_dir.clone().unwrap());
     let downloads: Vec<PathBuf> = util::filepaths_in(downloads).unwrap_or(vec![]);
     if downloads.is_empty() {
         return Ok(());

@@ -97,18 +97,18 @@ COMMANDS
         -c      Clear the input file after scraping
 
     tag LIBRARY [OPTIONS]
-        Tag all downloaded files in the directory specified by YT_DLP_OUTPUT_DIR
+        Tag all downloaded files in the directory specified by INPUT_DIR
 
         OPTIONS
-        -y      Set the YT_DLP_OUTPUT_DIR, required if not set in lib.conf
+        -i      Set the INPUT_DIR, required if not set in lib.conf
 
     deposit LIBRARY [OPTIONS]
         Move downloaded files to the directory specified by TARGET_DIR
 
         OPTIONS
         -d      Deposit downloaded files in organized subfolders of TARGET_DIR, requires -o
-        -o      Set the TARGET_DIR, requires -y
-        -y      Set the YT_DLP_OUTPUT_DIR, required if not set in lib.conf
+        -i      Set the INPUT_DIR, required if not set in lib.conf
+        -o      Set the TARGET_DIR (output directory), requires -i
 
     process LIBRARY [OPTIONS]
         Process LIBRARY as specified by `STEPS`. Any options from `download`, `tag`, `deposit` are valid here
