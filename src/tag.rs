@@ -138,7 +138,9 @@ pub fn tag(config: &Config) -> types::UnitResult {
         print_proposal("FILENAME", &Some(&filename), &Some(&new_filename));
         println!("Tags:");
         print_proposal("ARTIST", &old_artist, &artist);
-        print_proposal("ALBUM_ARTIST", &old_album_artist, &artist);
+        if old_album.is_some() || album.is_some() {
+            print_proposal("ALBUM_ARTIST", &old_album_artist, &artist);
+        }
         print_proposal("ALBUM", &old_album, &album);
         print_proposal(
             "TITLE",
@@ -152,11 +154,13 @@ pub fn tag(config: &Config) -> types::UnitResult {
             if let Some(artist) = artist.clone() {
                 entry_tag.set_artist(&artist);
             }
-            if let Some(album) = album {
-                entry_tag.set_album_title(album.as_str());
+            if old_album.is_some() || album.is_some() {
                 if let Some(artist) = artist {
                     entry_tag.set_album_artist(&artist);
                 }
+            }
+            if let Some(album) = album {
+                entry_tag.set_album_title(album.as_str());
             }
             if let Some(title) = title {
                 entry_tag.set_title(title.as_str());
@@ -217,7 +221,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
     for delim in "-_~｜".chars() {
         if let Some((full_author, full_title)) = meta_title.split_once(delim) {
             // Authors to the left of "-", e.g. Band ft Artist, Musician & Singer - Song
-            let author_re = Regex::new(r"(\sfeaturing|\sfeat\.?|\sft\.?|&|,)").unwrap();
+            let author_re = Regex::new(r"(?i)(\sfeaturing|\sfeat\.?|\sft\.?|\sw[⧸/]|&|,)").unwrap();
             author.extend(author_re.split(full_author).map(|s| s.trim().to_string()));
 
             let full_title = full_title.trim();
@@ -229,7 +233,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
 
     let re = Regex::new(
         r"(?xi)
-        (?<feat>\((featuring|feat\.?|ft\.?)[^\)]*\)|(featuring|feat\.?|ft\.?)[^\)]*) |
+        (?<feat>\((featuring|feat\.?|ft\.?|w[⧸/])[^\)]*\)|(featuring|feat\.?|ft\.?|w[⧸/])[^\)]*) |
         (?<year>\(\d{4}\)|\d{4}) |
         (?<remix>[\[({<][^\[\](){}<>]*((re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
         (?<album>【[^【】]*(?<album_rmv>F.C)[^【】]*】) |
@@ -247,7 +251,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
             title = util::remove_str_from_string(title, feat);
             let feat = util::remove_brackets(feat);
             // Authors to the right of "-", e.g. Band - Song (ft Artist, Musician & Singer)
-            let author_re = Regex::new(r"(featuring|feat\.?|ft\.?|&|,)").unwrap();
+            let author_re = Regex::new(r"(?i)(featuring|feat\.?|ft\.?|w[⧸/]|&|,)").unwrap();
             author.extend(author_re.split(&feat).skip(1).map(|s| s.trim().to_string()));
         }
 
@@ -330,6 +334,12 @@ mod tests {
         assert_eq!(tags["author"], "Soft Artist");
 
         let tags = build_tags("Artist - Song (feat.Band)", true).unwrap();
+        assert_eq!(tags["author"], "Artist&Band");
+
+        let tags = build_tags("Artist - Song w/Band", true).unwrap();
+        assert_eq!(tags["author"], "Artist&Band");
+
+        let tags = build_tags("Artist - Song W/Band", true).unwrap();
         assert_eq!(tags["author"], "Artist&Band");
     }
 
