@@ -166,7 +166,7 @@ fn rename(entry: PathBuf, target: PathBuf) -> Option<String> {
             target.display()
         ))
     } else {
-        println!("  {} -> {}", entry.display(), target.display());
+        println!("  {}\n    -> {}", entry.display(), target.display());
         None
     }
 }
