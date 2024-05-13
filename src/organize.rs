@@ -50,15 +50,18 @@ pub fn deposit(config: &Config) -> types::UnitResult {
     Ok(())
 }
 
-/// Organize the `downloads` files into subfolders of `target_dir`. This is based
-/// on the artist tag of a file, or (the first letter of) the filename if the tag
-/// is not present.
+/// Organize the `downloads` files into subfolders of `target_dir`.
+/// If the 'artist' tag is present, a subfolder for the artist is created.
+/// If the tag is not present, the artist is guessed from the filename,
+/// i.e. the part to the left of '-'.
+/// If that fails, the first letter of the filename is used.
 ///
-/// Example files:
+/// Examples:
 /// - `randomfile.jpg`                         -> `target_dir/R/randomfile.jpg`
 /// - `Song.mp3 with artist tag 'Band'`        -> `target_dir/B/Band/Song.mp3`
+/// - `Song.mp3 without artist tag`            -> `target_dir/S/Song.mp3`
 /// - `Band - Song.mp3 with artist tag 'Band'` -> `target_dir/B/Band/Band - Song.mp3`
-/// - `Band - Song.mp3 without artist tag`     -> `target_dir/B/Band - Song.mp3`
+/// - `Band - Song.mp3 without artist tag`     -> `target_dir/B/Band/Band - Song.mp3`
 fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecString {
     println!("Sorting files into {}...", target_dir.display());
 
@@ -67,7 +70,9 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecStr
     for entry in downloads {
         let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
 
-        let target = if let Ok(tag) = Tag::new().read_from_path(&entry) {
+        let mut target = None;
+        // Attempt to get the 'LETTER/ARTIST/' subfolders
+        if let Ok(tag) = Tag::new().read_from_path(&entry) {
             if let Some(artist) = tag.artist() {
                 // '.' cannot appear last in folder name
                 let artist = if artist.ends_with('.') {
@@ -75,18 +80,25 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecStr
                 } else {
                     artist
                 };
-                let letter = letter_for(artist);
-
-                target_dir.join(letter).join(artist)
-            } else {
-                target_dir.join(letter_for(&filename))
+                target = Some(target_dir.join(letter_for(artist)).join(artist));
             }
-        } else {
-            target_dir.join(letter_for(&filename))
-        };
+        }
+        if target.is_none() {
+            // Attempt to get the ARTIST from filename
+            if let Some((author, _)) = filename.split_once('-') {
+                let author = author.trim();
+                if !author.is_empty() {
+                    target = Some(target_dir.join(letter_for(&author)).join(author));
+                }
+            }
+        }
+        if target.is_none() {
+            // Default to 'LETTER/' subfolder only
+            target = Some(target_dir.join(letter_for(&filename)));
+        }
 
-        let target_path = target.clone();
-        let target = util::guarantee_dir_path(target);
+        let target_path = target.clone().unwrap();
+        let target = util::guarantee_dir_path(target.unwrap());
         if target.is_err() {
             errors.push(format!(
                 "! Could not create target dir: {}\n    {}",

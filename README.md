@@ -200,6 +200,27 @@ echo "https://www.youtube.com/c/MyGamingChannel/videos" >> input.txt
 tapeworm download mychannels # call this every once in a while
 ```
 
+You can also use tapeworm without the downloading/tagging features, and exploit its filesystem organization capabilities. See this example for a library of pictures, where each picture's filename has to be formatted like `ARTIST - TITLE`, the artist can of course also be a source or event:
+```sh
+mkdir pics
+echo "STEPS=deposit" >> lib.conf
+echo "YT_DLP_OUTPUT_DIR=tmp" >> lib.conf # dir to put images in
+echo "TARGET_DIR=/home/USER/Pictures" >> lib.conf # dir to sort images into
+echo "DEPOSIT_AZ=true" >> lib.conf
+
+# Put some picture files in the folder
+mv ~/Downloads/artist-painting.jpg tmp
+mv ~/Downloads/dog.jpg tmp
+mv "~/Downloads/France holiday 2024 - beach.png" tmp
+
+# Sort the pictures into the target directory
+tapeworm process pics
+# Pictures are now in:
+# Pictures/A/artist/artist-painting.jpg
+# Pictures/D/dog.jpg
+# Pictures/F/France holiday 2024/France holiday 2024 - beach.png
+```
+
 ## Tagging
 
 The tagging feature exploits the information often contained in an uploaded video title, for example: `The Band ft. Artist - A Song (2000) [Instrumental]`. In order for this to work, make sure your `yt-dlp.conf` is set up with metadata options. The tagger uses the `title` metadata, so at least that field should be set (setting `--embed-metadata` is enough for this). See the music library example under [Examples](#examples).
