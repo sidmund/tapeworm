@@ -221,7 +221,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
     for delim in "-_~｜".chars() {
         if let Some((full_author, full_title)) = meta_title.split_once(delim) {
             // Authors to the left of "-", e.g. Band ft Artist, Musician & Singer - Song
-            let author_re = Regex::new(r"(?i)(\sfeaturing|\sfeat\.?|\sft\.?|\sw[⧸/]|&|,)").unwrap();
+            let author_re = Regex::new(r"(?i)(\sand\s|\sfeaturing|\sfeat\.?|\sft\.?|\sw[⧸/]|&|,)").unwrap();
             author.extend(author_re.split(full_author).map(|s| s.trim().to_string()));
 
             let full_title = full_title.trim();
@@ -233,7 +233,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
 
     let re = Regex::new(
         r"(?xi)
-        (?<feat>\((featuring|feat\.?|ft\.?|w[⧸/])[^\)]*\)|(featuring|feat\.?|ft\.?|w[⧸/])[^\)]*) |
+        (?<feat>\((\sand\s|featuring|feat\.?|ft\.?|w[⧸/])[^\)]*\)|(\sand\s|featuring|feat\.?|ft\.?|w[⧸/])[^\)]*) |
         (?<year>\(\d{4}\)|\d{4}) |
         (?<remix>[\[({<][^\[\](){}<>]*((re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
         (?<album>【[^【】]*(?<album_rmv>F.C)[^【】]*】) |
@@ -251,7 +251,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
             title = util::remove_str_from_string(title, feat);
             let feat = util::remove_brackets(feat);
             // Authors to the right of "-", e.g. Band - Song (ft Artist, Musician & Singer)
-            let author_re = Regex::new(r"(?i)(featuring|feat\.?|ft\.?|w[⧸/]|&|,)").unwrap();
+            let author_re = Regex::new(r"(?i)(\sand\s|featuring|feat\.?|ft\.?|w[⧸/]|&|,)").unwrap();
             author.extend(author_re.split(&feat).skip(1).map(|s| s.trim().to_string()));
         }
 
@@ -340,6 +340,9 @@ mod tests {
         assert_eq!(tags["author"], "Artist&Band");
 
         let tags = build_tags("Artist - Song W/Band", true).unwrap();
+        assert_eq!(tags["author"], "Artist&Band");
+
+        let tags = build_tags("Artist And Band - Song", true).unwrap();
         assert_eq!(tags["author"], "Artist&Band");
     }
 
