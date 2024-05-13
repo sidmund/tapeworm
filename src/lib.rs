@@ -214,7 +214,7 @@ impl Config {
         };
 
         // Commands that require a library
-        if ["show", "download", "tag", "deposit", "process"].contains(&config.command.as_str()) {
+        if ["show", "add", "download", "tag", "deposit", "process"].contains(&config.command.as_str()) {
             config.library = Some(Config::parse_library(args.next())?);
             config.setup_library_paths();
         }
