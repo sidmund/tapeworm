@@ -51,6 +51,7 @@ pub fn deposit(config: &Config) -> types::UnitResult {
 
 /// Organize the `downloads` files into subfolders of `target_dir`.
 /// If the 'artist' tag is present, a subfolder for the artist is created.
+/// If the 'album' tag is present, a further subfolder for the album is created.
 /// If the tag is not present, the artist is guessed from the filename,
 /// i.e. the part to the left of '-'.
 /// If that fails, the first letter of the filename is used.
@@ -61,6 +62,7 @@ pub fn deposit(config: &Config) -> types::UnitResult {
 /// - `Song.mp3 without artist tag`            -> `target_dir/S/Song.mp3`
 /// - `Band - Song.mp3 with artist tag 'Band'` -> `target_dir/B/Band/Band - Song.mp3`
 /// - `Band - Song.mp3 without artist tag`     -> `target_dir/B/Band/Band - Song.mp3`
+/// - `Band - Song.mp3 with artist, album tag` -> `target_dir/B/Band/Album/Band - Song.mp3`
 fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecString {
     println!("Sorting files into {}...", target_dir.display());
 
@@ -68,10 +70,12 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecStr
 
     for entry in downloads {
         let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
+        let tag = Tag::new().read_from_path(&entry);
 
         let mut target = None;
-        // Attempt to get the 'LETTER/ARTIST/' subfolders
-        if let Ok(tag) = Tag::new().read_from_path(&entry) {
+
+        if let Ok(tag) = &tag {
+            // Attempt to get the ARTIST from tag
             if let Some(artist) = tag.artist() {
                 // '.' cannot appear last in folder name
                 let artist = if artist.ends_with('.') {
@@ -91,8 +95,21 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecStr
                 }
             }
         }
-        if target.is_none() {
-            // Default to 'LETTER/' subfolder only
+        if target.is_some() {
+            // Now that ARTIST is set, try to also set the ALBUM subfolder (from tag)
+            if let Ok(tag) = &tag {
+                if let Some(album) = tag.album_title() {
+                    // '.' cannot appear last in folder name
+                    let album = if album.ends_with('.') {
+                        &album[..album.len() - 1]
+                    } else {
+                        album
+                    };
+                    target = Some(target.unwrap().join(album));
+                }
+            }
+        } else {
+            // No ARTIST, default to 'LETTER/' subfolder only
             target = Some(target_dir.join(letter_for(&filename)));
         }
 
