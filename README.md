@@ -82,12 +82,13 @@ Removing the `tapeworm/LIBRARY` folder is all that is needed to remove the libra
 
 #### lib.conf
 
-This specifies library settings, in newline-separated `name=value` pairs. If this file is not present, these defaults are used:
+This specifies library settings, in newline-separated `name=value` pairs. If this file is not present, these defaults listed below are used. The **Command** column indicates which command(s) use that setting.
 
-| Setting name | Default value | Command | Description |
+| Setting | Default | Command | Description |
 |:-|:-|:-|:-|
 | CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
 | DEPOSIT_AZ | false | `deposit` | If `TARGET_DIR` is set, enabling this will make it move files into alphabetic subdirectories of the target folder, instead of immediately in the target folder. See the example below. |
+| DESCRIPTION | | `show` | Description of the library, used for informational purposes |
 | INPUT_DIR | | `tag`, `deposit` | The folder where the `tag` and `deposit` commands take their inputs from. If you use the `download` command, you'll generally want yt-dlp to put its downloads into this folder, so they can be processed further. The folder is either a LIBRARY-relative path or an absolute path. **Required** for `tag` and `deposit` commands. |
 | STEPS | | `process` | A comma-separated list of commands (`process` and `add` excluded). This is a convenience option, see the music library example |
 | TARGET_DIR | | `deposit` | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `INPUT_DIR` to be set. |

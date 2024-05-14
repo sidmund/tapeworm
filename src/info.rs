@@ -16,6 +16,9 @@ pub fn show(config: &Config) -> types::UnitResult {
     }
 
     println!("LIBRARY: {}", config.library.clone().unwrap());
+    if let Some(desc) = &config.lib_desc {
+        println!("DESC: \"{}\"", desc);
+    }
 
     if fs::metadata(&config.lib_conf_path.clone().unwrap()).is_ok() {
         println!("  lib.conf [OK]");

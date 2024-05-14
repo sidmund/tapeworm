@@ -16,6 +16,7 @@ use url::Url;
 pub struct Config {
     pub command: String,
     pub library: Option<String>,
+    pub lib_desc: Option<String>,
 
     // Add
     pub terms: Option<Vec<String>>, // QUERY | URL...
@@ -137,6 +138,7 @@ impl Config {
             if let Some((key, value)) = line.split_once("=") {
                 match key.to_lowercase().as_str() {
                     // General
+                    "description" => self.lib_desc = Some(String::from(value)),
                     "verbose" => self.verbose = value.parse::<bool>()?,
                     // Download
                     "clear_input" => self.clear_input = value.parse::<bool>()?,
@@ -222,6 +224,8 @@ impl Config {
         // Parse extra options for commands that have them
         if config.command == "add" {
             config.parse_terms(args)?;
+        } else if config.command == "show" {
+            config.build_lib_conf_options()?; // just load the library settings
         } else if ["download", "tag", "deposit", "process"].contains(&config.command.as_str()) {
             // Commands that use options from lib.conf / CLI
             config.build_lib_conf_options()?; // override defaults with lib.conf
