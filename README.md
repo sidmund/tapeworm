@@ -95,7 +95,7 @@ This specifies library settings, in newline-separated `name=value` pairs. If thi
 | TARGET_DIR | | `deposit` | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `INPUT_DIR` to be set. |
 | VERBOSE | false | any | Show verbose output |
 
-How `DEPOSIT_AZ` works:
+`DEPOSIT_AZ` will organize files into `TARGET_DIR/A-Z/ARTIST?/ALBUM?/TRACK.ext`. Examples:
 
 ```
 # DEPOSIT_AZ=false (default)
@@ -226,6 +226,8 @@ tapeworm process pics
 ## Tagging
 
 The tagging feature exploits the information often contained in an uploaded video title, for example: `The Band ft. Artist - A Song (2000) [Instrumental]`. In order for this to work, make sure your `yt-dlp.conf` is set up with metadata options. The tagger uses the `title` metadata, so at least that field should be set (setting `--embed-metadata` is enough for this). See the music library example under [Examples](#examples).
+
+The tagging feature also changes the filename to a standardized format: `ARTIST - TITLE (FEAT...)? [REMIX]?`.
 
 Note that if you have metadata options in `yt-dlp.conf` these are always applied, enabling or disabling tagging does not change that. Tagging only acts as an additional processing step.
 
