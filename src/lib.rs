@@ -18,27 +18,27 @@ pub struct Config {
     pub library: Option<String>,
     pub lib_desc: Option<String>,
 
-    // Add
-    pub terms: Option<Vec<String>>, // QUERY | URL...
-
-    // Download options
-    pub clear_input: bool,
-    pub verbose: bool,
-
     // Paths
     pub lib_path: Option<PathBuf>,
     pub lib_conf_path: Option<PathBuf>,
     pub input_path: Option<PathBuf>,
     pub yt_dlp_conf_path: Option<PathBuf>,
 
-    // Tagging
+    // Add options
+    pub terms: Option<Vec<String>>, // QUERY | URL...
+
+    // Download options
+    pub clear_input: bool,
+    pub verbose: bool,
+
+    // Tag options
     pub input_dir: Option<PathBuf>,
 
-    // Depositing
+    // Deposit options
     pub deposit_az: bool,
     pub target_dir: Option<PathBuf>,
 
-    // Processing
+    // Process options
     pub steps: Option<Vec<String>>,
 }
 
@@ -57,18 +57,16 @@ impl Config {
         }
     }
 
-    fn parse_library(library: Option<String>) -> types::StringResult {
-        if let Some(library) = library {
-            Ok(library)
-        } else {
-            Err("Library not specified. See 'help'".into())
+    fn parse_library(&mut self, library: Option<String>) -> types::UnitResult {
+        if library.is_none() {
+            return Err("Library not specified. See 'help'".into());
         }
-    }
 
-    fn setup_library_paths(&mut self) {
+        let library = library.unwrap();
+
         let lib_path = PathBuf::from(dirs::config_dir().unwrap())
             .join("tapeworm")
-            .join(self.library.clone().unwrap());
+            .join(library.clone());
 
         let mut lib_conf_path = lib_path.join("lib");
         lib_conf_path.set_extension("conf");
@@ -79,10 +77,13 @@ impl Config {
         let mut yt_dlp_conf_path = lib_path.join("yt-dlp");
         yt_dlp_conf_path.set_extension("conf");
 
+        self.library = Some(library);
         self.lib_path = Some(lib_path);
         self.lib_conf_path = Some(lib_conf_path);
         self.input_path = Some(input_path);
         self.yt_dlp_conf_path = Some(yt_dlp_conf_path);
+
+        Ok(())
     }
 
     fn parse_terms(&mut self, mut args: impl Iterator<Item = String>) -> types::UnitResult {
@@ -216,9 +217,10 @@ impl Config {
         };
 
         // Commands that require a library
-        if ["show", "add", "download", "tag", "deposit", "process"].contains(&config.command.as_str()) {
-            config.library = Some(Config::parse_library(args.next())?);
-            config.setup_library_paths();
+        if ["show", "add", "download", "tag", "deposit", "process"]
+            .contains(&config.command.as_str())
+        {
+            config.parse_library(args.next())?;
         }
 
         // Parse extra options for commands that have them
