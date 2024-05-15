@@ -77,18 +77,9 @@ pub fn tag(config: &Config) -> types::UnitResult {
         let mut artist = None;
         if let Some(a) = entry_tag.artist() {
             old_artist = Some(String::from(a));
-            // TODO the "comment" that yt-dlp sets is not the same as the one audiotags tries to read?
-            // it does not detect it, and it does not provide a function for purl either...
-            // in that case, if we want the url, we gotta set it in the output format
-            // if let Some(comment) = entry_tag.comment() {
-            //     // yt-dlp sets the comment tag to the url with --embed-metadata
-            //     if let Ok(url) = Url::parse(comment) {
-            //         if url.host_str() == Some("soundcloud.com") {
-            //             // On soundcloud we can assume the artist tag is valid, so we add it here as the main artist
-            //             artist = old_artist.clone();
-            //         }
-            //     }
-            // }
+            if !config.override_artist {
+                artist = old_artist.clone();
+            }
         }
 
         if let Some(author) = tags.get("author") {
@@ -221,7 +212,8 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
     for delim in "-_~｜".chars() {
         if let Some((full_author, full_title)) = meta_title.split_once(delim) {
             // Authors to the left of "-", e.g. Band ft Artist, Musician & Singer - Song
-            let author_re = Regex::new(r"(?i)(\sand\s|\sfeaturing|\sfeat\.?|\sft\.?|\sw[⧸/]|&|,)").unwrap();
+            let author_re =
+                Regex::new(r"(?i)(\sand\s|\sfeaturing|\sfeat\.?|\sft\.?|\sw[⧸/]|&|,)").unwrap();
             author.extend(author_re.split(full_author).map(|s| s.trim().to_string()));
 
             let full_title = full_title.trim();

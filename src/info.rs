@@ -28,7 +28,6 @@ pub fn show(config: &Config) -> types::UnitResult {
 
     if fs::metadata(&config.input_path.clone().unwrap()).is_ok() {
         println!("  input.txt [OK]");
-        // TODO show number of inputs found
     } else {
         println!("  input.txt [NOT FOUND]");
     }
@@ -38,8 +37,6 @@ pub fn show(config: &Config) -> types::UnitResult {
     } else {
         println!("  yt-dlp.conf [NOT FOUND]");
     }
-
-    // TODO open file explorer in lib dir?
 
     Ok(())
 }

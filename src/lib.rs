@@ -32,6 +32,7 @@ pub struct Config {
     pub verbose: bool,
 
     // Tag options
+    pub override_artist: bool,
     pub input_dir: Option<PathBuf>,
 
     // Deposit options
@@ -143,6 +144,8 @@ impl Config {
                     "verbose" => self.verbose = value.parse::<bool>()?,
                     // Download
                     "clear_input" => self.clear_input = value.parse::<bool>()?,
+                    // Tag
+                    "override_artist" => self.override_artist = value.parse::<bool>()?,
                     // Tag, Deposit
                     "input_dir" => self.input_dir = Some(PathBuf::from(value)),
                     // Deposit
