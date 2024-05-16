@@ -36,7 +36,10 @@ pub struct Config {
     pub input_dir: Option<PathBuf>,
 
     // Deposit options
-    pub deposit_az: bool,
+    /// If `None`, will cause `deposit` to simply drop files in the `target_dir`.
+    /// Otherwise, it will be organized into the `target_dir` per below:
+    /// - "A-Z": Sort into alphabetic subfolders, and possibly ARTIST and ALBUM subfolders
+    pub organize: Option<String>,
     pub target_dir: Option<PathBuf>,
 
     // Process options
@@ -150,7 +153,7 @@ impl Config {
                     "input_dir" => self.input_dir = Some(PathBuf::from(value)),
                     // Deposit
                     "target_dir" => self.target_dir = Some(PathBuf::from(value)),
-                    "deposit_az" => self.deposit_az = value.parse::<bool>()?,
+                    "organize" => self.organize = Some(String::from(value)),
                     // Process
                     "steps" => self.steps = Some(value.split(',').map(String::from).collect()),
                     _ => return Err(format!("Invalid config option: {}", key).into()),
@@ -186,7 +189,7 @@ impl Config {
                         self.input_dir = args.next().map(PathBuf::from)
                     }
                     'd' if self.command == "deposit" || self.command == "process" => {
-                        self.deposit_az = true
+                        self.organize = Some(args.next().unwrap())
                     }
                     'o' if self.command == "deposit" || self.command == "process" => {
                         self.target_dir = args.next().map(PathBuf::from)

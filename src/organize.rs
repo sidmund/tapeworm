@@ -12,7 +12,8 @@ use std::path::PathBuf;
 /// Directories are not moved, only files.
 /// If a file already exists in TARGET_DIR, it will be overwritten.
 ///
-/// If DEPOSIT_AZ is enabled, files will be moved to organized subdirectories of TARGET_DIR.
+/// If ORGANIZE is specified, files will be moved to organized subdirectories of TARGET_DIR,
+/// according to the organization mode.
 pub fn deposit(config: &Config) -> types::UnitResult {
     if config.target_dir.is_none() {
         return Err("'TARGET_DIR' must be set for moving downloads. See 'help'".into());
@@ -33,11 +34,20 @@ pub fn deposit(config: &Config) -> types::UnitResult {
         PathBuf::from(config.lib_path.clone().unwrap()).join(config.target_dir.clone().unwrap());
     let target_dir = util::guarantee_dir_path(target_dir)?;
 
-    if let Some(errors) = if config.deposit_az {
-        organize(target_dir, downloads)
+    let errors = if let Some(mode) = &config.organize {
+        match mode.as_str() {
+            "A-Z" => organize(target_dir, downloads),
+            _ => {
+                return Err(
+                    format!("Unrecognized organization mode: '{}'. See 'help'", mode).into(),
+                )
+            }
+        }
     } else {
         drop(target_dir, downloads)
-    } {
+    };
+
+    if let Some(errors) = errors {
         return Err(format!(
             "Could not move {} files to target directory:{}",
             errors.len(),
