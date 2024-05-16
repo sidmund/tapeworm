@@ -107,6 +107,12 @@ pub fn tag(config: &Config) -> types::UnitResult {
             title = Some(format!("{} [{}]", title.unwrap_or(String::new()), remix));
         }
 
+        let genre =  if let Some(g) = tags.get("genre") {
+            Some(g.as_str())
+        } else {
+            None
+        };
+
         let new_filename = if let Some(artist) = artist.clone() {
             if let Some(title) = title.clone() {
                 format!("{} - {}.mp3", artist, title)
@@ -139,6 +145,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
             &title.as_ref().map(|s| s.as_str()),
         );
         print_proposal("YEAR", &entry_tag.year(), &year);
+        print_proposal("GENRE", &entry_tag.genre(), &genre);
 
         if util::confirm("Accept these changes?", true)? {
             // Write tags
@@ -158,6 +165,9 @@ pub fn tag(config: &Config) -> types::UnitResult {
             }
             if let Some(year) = year {
                 entry_tag.set_year(year);
+            }
+            if let Some(genre) = genre {
+                entry_tag.set_genre(genre);
             }
             entry_tag.write_to_path(entry.to_str().unwrap())?;
 
@@ -190,6 +200,60 @@ where
     }
 }
 
+/// Attempt to split the full title into an author (left) and title (right) part.
+/// 
+/// # Returns
+/// - `None`: when the title could not be split
+/// - `Some(Vec<String>, String)`: a list of authors and the rest of the title
+/// 
+/// # Example
+/// For the input "Band ft Artist, Musician & Singer - Song",
+/// the returned authors are ["Band", "Artist", "Musician", "Singer"]
+/// and the returned title is "Song".
+fn from_split(full_title: &str) -> Option<(Vec<String>, String)> {
+    let re =
+        Regex::new(r"(?i)(\sand\s|\sfeaturing|\sfeat\.?|\sft\.?|\sw[⧸/]|&|,)").unwrap();
+
+    for delim in "-_~｜".chars() {
+        if let Some((authors, title)) = full_title.split_once(delim) {
+            let authors = re.split(authors).map(|s| s.trim().to_string()).collect();
+            return Some((authors, title.trim().to_string()));
+        }
+    }
+
+    None
+}
+
+/// Attempt to get the genre, artist, and title from the full title.
+/// 
+/// # Parameters
+/// - `full_title`: expected to be in the format `「GENRE」[ARTIST] TITLE`
+fn from_format(full_title: &str, verbose: bool) -> (Option<&str>, Option<&str>, Option<&str>) {
+    let re = Regex::new(r"^「(?<genre>[^」]+)」\[(?<artist>[^\]]+)\]\s(?<title>.+)$").unwrap();
+
+    let mut genre = None;
+    let mut artist = None;
+    let mut title = None;
+
+    for caps in re.captures_iter(full_title) {
+        if verbose {
+            println!("Captures: {:?}", caps);
+        }
+
+        if let Some(m) = caps.name("genre") {
+            genre = Some(m.as_str());
+        }
+        if let Some(m) = caps.name("artist") {
+            artist = Some(m.as_str());
+        }
+        if let Some(m) = caps.name("title") {
+            title = Some(m.as_str());
+        }
+    }
+
+    (genre, artist, title)
+}
+
 /// Attempt to extract tags from the title metadata.
 ///
 /// Returns None if no tags could be extracted.
@@ -205,21 +269,27 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
 
     let mut tags: HashMap<&str, String> = HashMap::new();
 
-    let mut meta_title = meta_title;
+    // The full title (used for tag extracting)
+    let mut meta_title = String::from(meta_title);
+    // The resulting actual track title (some info might be stripped / added)
     let mut title = meta_title.to_string();
     let mut author: Vec<String> = Vec::new();
 
-    for delim in "-_~｜".chars() {
-        if let Some((full_author, full_title)) = meta_title.split_once(delim) {
-            // Authors to the left of "-", e.g. Band ft Artist, Musician & Singer - Song
-            let author_re =
-                Regex::new(r"(?i)(\sand\s|\sfeaturing|\sfeat\.?|\sft\.?|\sw[⧸/]|&|,)").unwrap();
-            author.extend(author_re.split(full_author).map(|s| s.trim().to_string()));
-
-            let full_title = full_title.trim();
-            title = full_title.to_string();
-            meta_title = full_title;
-            break;
+    if let Some((authors, rest_title)) = from_split(&meta_title) {
+        author.extend(authors);
+        title = rest_title.clone();
+        meta_title = rest_title;
+    } else {
+        let (genre, artist, rest_title) = from_format(&meta_title, verbose);
+        if let Some(genre) = genre {
+            tags.insert("genre", genre.to_string());
+        }
+        if let Some(artist) = artist {
+            author.push(artist.to_string());
+        }
+        if let Some(rest_title) = rest_title {
+            title = rest_title.to_string();
+            meta_title = rest_title.to_string();
         }
     }
 
@@ -233,7 +303,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
         ",
     );
 
-    for caps in re.unwrap().captures_iter(meta_title) {
+    for caps in re.unwrap().captures_iter(&meta_title) {
         if verbose {
             println!("Captures: {:?}", caps);
         }
@@ -402,5 +472,13 @@ mod tests {
         let tags = build_tags("Artist - Song (Music Video)", true).unwrap();
         assert_eq!(tags["title"], "Song");
         assert_eq!(tags.get("remix"), None);
+    }
+
+    #[test]
+    fn test_from_format() {
+        let tags = build_tags("「Deep House」[DJ Test] My House", true).unwrap();
+        assert_eq!(tags["author"], "DJ Test");
+        assert_eq!(tags["title"], "My House");
+        assert_eq!(tags["genre"], "Deep House");
     }
 }
