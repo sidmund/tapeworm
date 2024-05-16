@@ -199,11 +199,12 @@ fn rename(entry: PathBuf, target: PathBuf) -> Option<String> {
 }
 
 fn letter_for(s: &str) -> String {
-    let mut letter = String::from(&s[..1].to_uppercase());
-    if !"ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains(letter.as_str()) {
-        letter = String::from("0-9#"); // symbols and 'weird letters'
+    let letter = s.chars().nth(0).unwrap().to_ascii_uppercase();
+    if "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains(letter) {
+        String::from(letter)
+    } else {
+        String::from("0-9#") // symbols and 'weird letters'
     }
-    letter
 }
 
 /// Checks if a file already exists at the `target` location,
