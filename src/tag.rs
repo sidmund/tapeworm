@@ -5,7 +5,7 @@ use crate::util;
 use crate::Config;
 use audiotags::Tag;
 use regex::Regex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
@@ -75,32 +75,34 @@ pub fn tag(config: &Config) -> types::UnitResult {
 
         let mut old_artist = None;
         let mut artist = None;
+        let mut feat: HashSet<String> = HashSet::new();
         if let Some(a) = entry_tag.artist() {
             old_artist = Some(String::from(a));
             if !config.override_artist {
-                artist = old_artist.clone();
+                let mut multiple = separate_authors(&old_artist.clone().unwrap());
+                artist = Some(multiple.remove(0));
+                feat.extend(multiple.into_iter().filter(|s| s != &artist.clone().unwrap()));
             }
         }
 
         if let Some(author) = tags.get("author") {
-            let mut artists = author.split("&");
-
-            // First artist is seen as main
+            let mut multiple: Vec<String> = author.split("&").map(|s| s.to_string()).collect();
             if artist.is_none() {
-                if let Some(a) = artists.next() {
-                    artist = Some(String::from(a));
-                }
+                artist = Some(multiple.remove(0)); // First is treated as main artist
+                feat.extend(multiple.into_iter().filter(|s| s != &artist.clone().unwrap()));
+            } else {
+                feat.extend(multiple);
             }
+        }
 
-            if let Some(mut feat) = artists
-                .map(|s| s.to_string())
-                .reduce(|a, b| format!("{}, {}", a, b))
-            {
-                if let Some(i) = feat.rfind(',') {
-                    feat.replace_range(i..=i, " &");
-                }
-                title = Some(format!("{} ({})", title.unwrap_or(String::new()), feat));
+        // Modify the title so it includes the featuring artists, e.g. "(ARTIST, ARTIST & ARTIST)"
+        let feat: HashSet<String> = feat.into_iter().collect(); // Remove dupes
+        if let Some(mut feat) = feat.into_iter().reduce(|a, b| format!("{}, {}", a, b))
+        {
+            if let Some(i) = feat.rfind(',') {
+                feat.replace_range(i..=i, " &");
             }
+            title = Some(format!("{} ({})", title.unwrap_or(String::new()), feat));
         }
 
         if let Some(remix) = tags.get("remix") {
