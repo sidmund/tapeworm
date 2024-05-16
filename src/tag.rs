@@ -199,6 +199,14 @@ where
     }
 }
 
+/// Separates a string like "Band ft Artist, Musician & Singer"
+/// into a vector like ["Band", "Artist", "Musician", "Singer"].
+fn separate_authors(authors: &str) -> Vec<String> {
+    let re =
+        Regex::new(r"(?i)(\sand\s|(^|\s)featuring|(^|\s)feat\.?|(^|\s)ft\.?|(^|\s)w[⧸/]|&|,)").unwrap();
+    re.split(authors).map(|s| s.trim().to_string()).collect()
+}
+
 /// Attempt to split the full title into an author (left) and title (right) part.
 /// 
 /// # Returns
@@ -210,13 +218,9 @@ where
 /// the returned authors are ["Band", "Artist", "Musician", "Singer"]
 /// and the returned title is "Song".
 fn from_split(full_title: &str) -> Option<(Vec<String>, String)> {
-    let re =
-        Regex::new(r"(?i)(\sand\s|\sfeaturing|\sfeat\.?|\sft\.?|\sw[⧸/]|&|,)").unwrap();
-
     for delim in "-_~｜".chars() {
         if let Some((authors, title)) = full_title.split_once(delim) {
-            let authors = re.split(authors).map(|s| s.trim().to_string()).collect();
-            return Some((authors, title.trim().to_string()));
+            return Some((separate_authors(authors), title.trim().to_string()));
         }
     }
 
@@ -307,13 +311,11 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
             println!("Captures: {:?}", caps);
         }
 
-        if let Some(feat) = caps.name("feat") {
+        if let Some(feat) = caps.name("feat") { // Authors to the right of "-"
             let feat = feat.as_str();
             title = util::remove_str_from_string(title, feat);
             let feat = util::remove_brackets(feat);
-            // Authors to the right of "-", e.g. Band - Song (ft Artist, Musician & Singer)
-            let author_re = Regex::new(r"(?i)(\sand\s|featuring|feat\.?|ft\.?|w[⧸/]|&|,)").unwrap();
-            author.extend(author_re.split(&feat).skip(1).map(|s| s.trim().to_string()));
+            author.extend(separate_authors(&feat).into_iter().skip(1));
         }
 
         if let Some(year) = caps.name("year") {
