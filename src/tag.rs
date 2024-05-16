@@ -131,9 +131,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
             filename.clone()
         };
 
-        println!("Proposed changes:");
-        print_proposal("FILENAME", &Some(&filename), &Some(&new_filename));
-        println!("Tags:");
+        println!("\nProposed changes:");
         print_proposal("ARTIST", &old_artist, &artist);
         if old_album.is_some() || album.is_some() {
             print_proposal("ALBUM_ARTIST", &old_album_artist, &artist);
@@ -146,6 +144,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
         );
         print_proposal("YEAR", &entry_tag.year(), &year);
         print_proposal("GENRE", &entry_tag.genre(), &genre);
+        print_proposal("FILENAME", &Some(&filename), &Some(&new_filename));
 
         if util::confirm("Accept these changes?", true)? {
             // Write tags
@@ -185,17 +184,17 @@ where
     T: std::fmt::Display + PartialEq,
 {
     if old.is_none() {
-        if new.is_none() {
-            println!("{:<15} N/A", name);
-        } else {
-            println!("{:<15} N/A -> {}", name, new.as_ref().unwrap());
+        if new.is_some() {
+            println!("  {:<15} N/A\n{:<20}-> {}", name, "", new.as_ref().unwrap());
+        // } else {
+        //     println!("  {:<15} N/A", name);
         }
     } else {
         let old = old.as_ref().unwrap();
         if new.is_none() || new.as_ref().is_some_and(|x| *x == *old) {
-            println!("{:<15} {} -> unchanged", name, old);
+            println!("  {:<15} {}\n{:<20}(keep as is)", name, old, "");
         } else {
-            println!("{:<15} {} -> {}", name, old, new.as_ref().unwrap());
+            println!("  {:<15} {}\n{:<20}-> {}", name, old, "", new.as_ref().unwrap());
         }
     }
 }
