@@ -106,9 +106,16 @@ COMMANDS
         Move downloaded files to the directory specified by TARGET_DIR
 
         OPTIONS
-        -d      Deposit downloaded files in organized subfolders of TARGET_DIR, requires -o
-        -i      Set the INPUT_DIR, required if not set in lib.conf
-        -o      Set the TARGET_DIR (output directory), requires -i
+        -d MODE
+            Requires -o. Deposit files into an organized manner into the TARGET_DIR.
+            MODE is one of the following:
+            - \"A-Z\": Sort into alphabetic subfolders, and possibly ARTIST and ALBUM subfolders
+
+        -i
+            Set the INPUT_DIR, required if not set in lib.conf
+
+        -o
+            Set the TARGET_DIR (output directory), requires -i
 
     process LIBRARY [OPTIONS]
         Process LIBRARY as specified by `STEPS`. Any options from `download`, `tag`, `deposit` are valid here

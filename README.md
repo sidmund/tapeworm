@@ -87,7 +87,7 @@ This specifies library settings, in newline-separated `name=value` pairs. If thi
 | Setting | Default | Command | Description |
 |:-|:-|:-|:-|
 | CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
-| DEPOSIT_AZ | false | `deposit` | If `TARGET_DIR` is set, enabling this will make it move files into alphabetic subdirectories of the target folder, instead of immediately in the target folder. See the example below. |
+| ORGANIZE | | `deposit` | By default `deposit` simply drops files straight in the target folder. If this option is specified, it will organize the files instead, per one of the following methods: "A-Z" will make it move files into alphabetic subdirectories. See the example below. **Requires** `TARGET_DIR`. |
 | DESCRIPTION | | `show` | Description of the library, used for informational purposes |
 | INPUT_DIR | | `tag`, `deposit` | The folder where the `tag` and `deposit` commands take their inputs from. If you use the `download` command, you'll generally want yt-dlp to put its downloads into this folder, so they can be processed further. The folder is either a LIBRARY-relative path or an absolute path. **Required** for `tag` and `deposit` commands. |
 | OVERRIDE_ARTIST | false | `tag` | For some sites, such as YouTube, yt-dlp will set the 'artist' tag to the uploader instead of the actual artist (which might not be available in the metadata). If the artist can be parsed from the title, setting this option will allow it to override the (incorrect) artist set by the metadata. Other sites, such as bandcamp and soundcloud, do have the correct 'artist' metadata. This is intended to be used for downloading music from YouTube, where the uploader is not the artist per se. |
@@ -95,20 +95,23 @@ This specifies library settings, in newline-separated `name=value` pairs. If thi
 | TARGET_DIR | | `deposit` | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `INPUT_DIR` to be set. |
 | VERBOSE | false | any | Show verbose output |
 
-`DEPOSIT_AZ` will organize files into `TARGET_DIR/A-Z/ARTIST?/ALBUM?/TRACK.ext`. Examples:
+##### Organization modes
 
+Without specifying `ORGANIZE`, files are moved as follows:
 ```
-# DEPOSIT_AZ=false (default)
+TARGET_DIR/99.mp3
+TARGET_DIR/Artist - Painting.png
 TARGET_DIR/hello.mp3
-TARGET_DIR/world.mp3
-TARGET_DIR/Artist - Painting.jpg
-TARGET_DIR/Band - Song.mp3
-
-# DEPOSIT_AZ=true
+TARGET_DIR/painting.jpg
+TARGET_DIR/Song.mp3
+```
+With `ORGANIZE=A-Z` files will be moved to `TARGET_DIR/A-Z/ARTIST?/ALBUM?/FILENAME.EXT` (note that ALBUM is not relevant for image files):
+```
+TARGET_DIR/0-9#/99.mp3
 TARGET_DIR/A/Artist/Artist - Painting.jpg
-TARGET_DIR/B/Band/Band - Song.mp3
+TARGET_DIR/B/Band/Song.mp3  # has "Band" ARTIST tag
 TARGET_DIR/H/hello.mp3
-TARGET_DIR/W/world.mp3
+TARGET_DIR/P/painting.jpg
 ```
 
 #### input.txt
@@ -208,7 +211,7 @@ mkdir pics
 echo "STEPS=deposit" >> lib.conf
 echo "INPUT_DIR=tmp" >> lib.conf # dir to put images in
 echo "TARGET_DIR=/home/USER/Pictures" >> lib.conf # dir to sort images into
-echo "DEPOSIT_AZ=true" >> lib.conf
+echo "ORGANIZE=A-Z" >> lib.conf
 
 # Put some picture files in the folder
 mv ~/Downloads/artist-painting.jpg tmp
