@@ -87,9 +87,9 @@ This specifies library settings, in newline-separated `name=value` pairs. If thi
 | Setting | Default | Command | Description |
 |:-|:-|:-|:-|
 | CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
-| ORGANIZE | | `deposit` | By default `deposit` simply drops files straight in the target folder. If this option is specified, it will organize the files instead, per one of the following methods: "A-Z" will make it move files into alphabetic subdirectories. See the example below. **Requires** `TARGET_DIR`. |
 | DESCRIPTION | | `show` | Description of the library, used for informational purposes |
 | INPUT_DIR | | `tag`, `deposit` | The folder where the `tag` and `deposit` commands take their inputs from. If you use the `download` command, you'll generally want yt-dlp to put its downloads into this folder, so they can be processed further. The folder is either a LIBRARY-relative path or an absolute path. **Required** for `tag` and `deposit` commands. |
+| ORGANIZE | | `deposit` | By default `deposit` simply drops files straight in the target folder. If this option is specified, it will organize the files instead, per one of the following methods: "A-Z" will make it move files into alphabetic subdirectories. See the example below. **Requires** `TARGET_DIR`. |
 | OVERRIDE_ARTIST | false | `tag` | For some sites, such as YouTube, yt-dlp will set the 'artist' tag to the uploader instead of the actual artist (which might not be available in the metadata). If the artist can be parsed from the title, setting this option will allow it to override the (incorrect) artist set by the metadata. Other sites, such as bandcamp and soundcloud, do have the correct 'artist' metadata. This is intended to be used for downloading music from YouTube, where the uploader is not the artist per se. |
 | STEPS | | `process` | A comma-separated list of commands (`process` and `add` excluded). This is a convenience option, see the music library example |
 | TARGET_DIR | | `deposit` | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `INPUT_DIR` to be set. |
@@ -104,42 +104,45 @@ TARGET_DIR/Artist - Painting.png
 TARGET_DIR/hello.mp3
 TARGET_DIR/painting.jpg
 TARGET_DIR/Song.mp3
+TARGET_DIR/Song from album.mp3
 ```
 With `ORGANIZE=A-Z` files will be moved to `TARGET_DIR/A-Z/ARTIST?/ALBUM?/FILENAME.EXT` (note that ALBUM is not relevant for image files):
 ```
 TARGET_DIR/0-9#/99.mp3
 TARGET_DIR/A/Artist/Artist - Painting.jpg
 TARGET_DIR/B/Band/Song.mp3  # has "Band" ARTIST tag
+TARGET_DIR/B/Band/Album/Song from album.mp3  # has ARTIST "Band" and ALBUM "Album"
 TARGET_DIR/H/hello.mp3
 TARGET_DIR/P/painting.jpg
 ```
 
 #### input.txt
 
-When adding a URL or query with `tapeworm add LIBRARY URL`, it is appended to this file if not already present. The file is created if it did not exist yet.
-Each line is treated as a separate URL or query. A query may consist of one or more terms. Empty lines or lines prefixed by `#` are ignored.
+This file is created the first time `tapeworm add LIBRARY URL|TERM...` is issued. Each line is treated as a separate URL or query. Note that `TERM...` is added as a YouTube search query.
 
-An example:
+Example:
+```sh
+tapeworm add LIBRARY the artist - a song  # add a query
+tapeworm add LIBRARY https://youtube.com/watch?v=123  # add a URL
 ```
-the artist - a song
+The file now contains:
+```
+ytsearch:"the artist - a song"
 https://youtube.com/watch?v=123
 ```
 
 #### yt-dlp.conf
 
-This specifies download options for yt-dlp, see [yt-dlp](https://github.com/yt-dlp/yt-dlp) for valid options. tapeworm invokes yt-dlp as follows:
-
+This specifies download options for yt-dlp, see [yt-dlp](https://github.com/yt-dlp/yt-dlp) for valid options. When this file is present, tapeworm will invoke yt-dlp as:
 ```
-# If yt-dlp.conf is present:
-yt-dlp --config-location ~/.config/tapeworm/LIBRARY/yt-dlp.conf [URL...]
-
-# If yt-dlp.conf is not present:
-yt-dlp [URL...]
-
-# [URL...] is read from LIBRARY/input.txt
+yt-dlp --config-location ~/.config/tapeworm/LIBRARY/yt-dlp.conf [URL...]  # URLs read from input.txt
+```
+When this file is not present, tapeworm will invoke yt-dlp as:
+```
+yt-dlp [URL...]  # URLs read from input.txt
 ```
 
-Note that files are downloaded to the directory where `tapeworm` was invoked, *unless* yt-dlp.conf specifies differently in e.g. the `-P` or `-o` option.
+Note that files are downloaded to the directory where `tapeworm` was invoked, *unless* yt-dlp.conf specifies differently in e.g. the `-P` or `-o` option (see [yt-dlp](https://github.com/yt-dlp/yt-dlp)).
 
 Also note that if you want to use the tagging/depositing feature, the `INPUT_DIR` in `lib.conf` should match the path where yt-dlp downloads to.
 
