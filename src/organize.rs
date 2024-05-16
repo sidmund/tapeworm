@@ -87,12 +87,6 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecStr
         if let Ok(tag) = &tag {
             // Attempt to get the ARTIST from tag
             if let Some(artist) = tag.artist() {
-                // '.' cannot appear last in folder name
-                let artist = if artist.ends_with('.') {
-                    &artist[..artist.len() - 1]
-                } else {
-                    artist
-                };
                 target = Some(target_dir.join(letter_for(artist)).join(artist));
             }
         }
@@ -109,12 +103,6 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecStr
             // Now that ARTIST is set, try to also set the ALBUM subfolder (from tag)
             if let Ok(tag) = &tag {
                 if let Some(album) = tag.album_title() {
-                    // '.' cannot appear last in folder name
-                    let album = if album.ends_with('.') {
-                        &album[..album.len() - 1]
-                    } else {
-                        album
-                    };
                     target = Some(target.unwrap().join(album));
                 }
             }
