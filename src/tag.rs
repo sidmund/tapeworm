@@ -159,7 +159,7 @@ where
 /// Separates a string like "Band ft Artist, Musician & Singer"
 /// into a vector like ["Band", "Artist", "Musician", "Singer"].
 fn separate_authors(s: &str) -> Vec<String> {
-    let re = Regex::new(r"(?i)(\sand\s|(^|\s)featuring|(^|\s)feat\.?|(^|\s)ft\.?|(^|\s)w[⧸/]|&|,)");
+    let re = Regex::new(r"(?i)(\sand\s|(^|\s)featuring|(^|\s)feat\.?|(^|\s)ft\.?|(^|\s)w[⧸/]|&|,|，)");
     re.unwrap().split(s).map(|a| a.trim().to_string()).collect()
 }
 
@@ -355,6 +355,7 @@ mod tests {
             ("Artist - Song (feat.Band)", "Artist&Band"),
             ("Artist - Song w/Band", "Artist&Band"),
             ("Artist - Song W/Band", "Artist&Band"),
+            ("Artist ， Band - Song", "Artist&Band"),
         ];
         for (song, expected) in inputs {
             let tags = build_tags(song, true).unwrap();
