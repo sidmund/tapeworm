@@ -302,7 +302,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
         r"(?xi)
         (?<feat>\((\sand\s|featuring|feat\.?|ft\.?|w[⧸/])[^\)]*\)|(\sand\s|featuring|feat\.?|ft\.?|w[⧸/])[^\)]*) |
         (?<year>\(\d{4}\)|\d{4}) |
-        (?<remix>[\[({<][^\[\](){}<>]*((re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
+        (?<remix>[\[({<][^\[\](){}<>]*(edit|extended(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
         (?<album>【[^【】]*(?<album_rmv>F.C)[^【】]*】) |
         (?<strip>[\[({<][^\[\](){}<>]*((official\s)?(music\s)?video|m/?v|hq|hd)[^\[\](){}<>]*[\])}>])
         ",
@@ -448,6 +448,22 @@ mod tests {
         let tags = build_tags("Artist - Song [Instrumental]", true).unwrap();
         assert_eq!(tags["title"], "Song");
         assert_eq!(tags["remix"], "Instrumental");
+
+        let tags = build_tags("Artist - Song (Extended)", true).unwrap();
+        assert_eq!(tags["title"], "Song");
+        assert_eq!(tags["remix"], "Extended");
+
+        let tags = build_tags("Artist - Song (Extended Mix)", true).unwrap();
+        assert_eq!(tags["title"], "Song");
+        assert_eq!(tags["remix"], "Extended Mix");
+
+        let tags = build_tags("Artist - Song (Radio Edit)", true).unwrap();
+        assert_eq!(tags["title"], "Song");
+        assert_eq!(tags["remix"], "Radio Edit");
+
+        let tags = build_tags("Artist - Song (Edit)", true).unwrap();
+        assert_eq!(tags["title"], "Song");
+        assert_eq!(tags["remix"], "Edit");
     }
 
     #[test]
