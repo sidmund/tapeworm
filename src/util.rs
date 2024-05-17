@@ -88,7 +88,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_remove_brackets() {
+    fn removes_brackets() {
         assert_eq!(remove_brackets("(official video)"), "official video");
         assert_eq!(remove_brackets("[hard remix]"), "hard remix");
         assert_eq!(remove_brackets("{instrumental}"), "instrumental");
@@ -96,7 +96,7 @@ mod tests {
     }
 
     #[test]
-    fn test_remove_str_from_string() {
+    fn removes_str_from_string() {
         let input = String::from("Lorem ipsum dolor sic amet.");
         assert_eq!(
             remove_str_from_string(input, "dolor"),

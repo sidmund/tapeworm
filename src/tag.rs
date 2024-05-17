@@ -31,12 +31,14 @@ pub fn tag(config: &Config) -> types::UnitResult {
         let mut entry_tag = Tag::new().read_from_path(entry)?;
         let title = entry_tag.title();
         if title.is_none() {
+            println!("  No 'title' tag found, skipping");
             continue;
         }
 
         let title = String::from(title.unwrap());
         let tags = build_tags(title.as_str(), config.verbose);
         if tags.is_none() {
+            println!("  No additional tags found in title, skipping");
             continue;
         }
         let tags = tags.unwrap();
@@ -81,7 +83,10 @@ pub fn tag(config: &Config) -> types::UnitResult {
             if !config.override_artist {
                 let mut multiple = separate_authors(&old_artist.clone().unwrap());
                 artist = Some(multiple.remove(0));
-                feat.extend(multiple.into_iter().filter(|s| s != &artist.clone().unwrap()));
+                let multiple = multiple
+                    .into_iter()
+                    .filter(|s| s != &artist.clone().unwrap());
+                feat.extend(multiple);
             }
         }
 
@@ -89,7 +94,10 @@ pub fn tag(config: &Config) -> types::UnitResult {
             let mut multiple: Vec<String> = author.split("&").map(|s| s.to_string()).collect();
             if artist.is_none() {
                 artist = Some(multiple.remove(0)); // First is treated as main artist
-                feat.extend(multiple.into_iter().filter(|s| s != &artist.clone().unwrap()));
+                let multiple = multiple
+                    .into_iter()
+                    .filter(|s| s != &artist.clone().unwrap());
+                feat.extend(multiple);
             } else {
                 feat.extend(multiple);
             }
@@ -97,8 +105,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
 
         // Modify the title so it includes the featuring artists, e.g. "(ARTIST, ARTIST & ARTIST)"
         let feat: HashSet<String> = feat.into_iter().collect(); // Remove dupes
-        if let Some(mut feat) = feat.into_iter().reduce(|a, b| format!("{}, {}", a, b))
-        {
+        if let Some(mut feat) = feat.into_iter().reduce(|a, b| format!("{}, {}", a, b)) {
             if let Some(i) = feat.rfind(',') {
                 feat.replace_range(i..=i, " &");
             }
@@ -109,7 +116,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
             title = Some(format!("{} [{}]", title.unwrap_or(String::new()), remix));
         }
 
-        let genre =  if let Some(g) = tags.get("genre") {
+        let genre = if let Some(g) = tags.get("genre") {
             Some(g.as_str())
         } else {
             None
@@ -188,33 +195,31 @@ where
     if old.is_none() {
         if new.is_some() {
             println!("  {:<15} N/A\n{:<20}-> {}", name, "", new.as_ref().unwrap());
-        // } else {
-        //     println!("  {:<15} N/A", name);
-        }
+        } // No need to print anything when both are none
     } else {
         let old = old.as_ref().unwrap();
         if new.is_none() || new.as_ref().is_some_and(|x| *x == *old) {
             println!("  {:<15} {}\n{:<20}(keep as is)", name, old, "");
         } else {
-            println!("  {:<15} {}\n{:<20}-> {}", name, old, "", new.as_ref().unwrap());
+            let new = new.as_ref().unwrap();
+            println!("  {:<15} {}\n{:<20}-> {}", name, old, "", new);
         }
     }
 }
 
 /// Separates a string like "Band ft Artist, Musician & Singer"
 /// into a vector like ["Band", "Artist", "Musician", "Singer"].
-fn separate_authors(authors: &str) -> Vec<String> {
-    let re =
-        Regex::new(r"(?i)(\sand\s|(^|\s)featuring|(^|\s)feat\.?|(^|\s)ft\.?|(^|\s)w[⧸/]|&|,)").unwrap();
-    re.split(authors).map(|s| s.trim().to_string()).collect()
+fn separate_authors(s: &str) -> Vec<String> {
+    let re = Regex::new(r"(?i)(\sand\s|(^|\s)featuring|(^|\s)feat\.?|(^|\s)ft\.?|(^|\s)w[⧸/]|&|,)");
+    re.unwrap().split(s).map(|a| a.trim().to_string()).collect()
 }
 
 /// Attempt to split the full title into an author (left) and title (right) part.
-/// 
+///
 /// # Returns
 /// - `None`: when the title could not be split
 /// - `Some(Vec<String>, String)`: a list of authors and the rest of the title
-/// 
+///
 /// # Example
 /// For the input "Band ft Artist, Musician & Singer - Song",
 /// the returned authors are ["Band", "Artist", "Musician", "Singer"]
@@ -230,7 +235,7 @@ fn from_split(full_title: &str) -> Option<(Vec<String>, String)> {
 }
 
 /// Attempt to get the genre, artist, and title from the full title.
-/// 
+///
 /// # Parameters
 /// - `full_title`: expected to be in the format `「GENRE」[ARTIST] TITLE`
 fn from_format(full_title: &str, verbose: bool) -> (Option<&str>, Option<&str>, Option<&str>) {
@@ -313,7 +318,8 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
             println!("Captures: {:?}", caps);
         }
 
-        if let Some(feat) = caps.name("feat") { // Authors to the right of "-"
+        if let Some(feat) = caps.name("feat") {
+            // Authors to the right of "-"
             let feat = feat.as_str();
             title = util::remove_str_from_string(title, feat);
             let feat = util::remove_brackets(feat);
@@ -372,9 +378,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_spacing() {
-        let songs = ["Band - Song", "Band- Song", "Band -Song", "Band-Song"];
-        for song in songs {
+    fn parses_spacing() {
+        let inputs = ["Band - Song", "Band- Song", "Band -Song", "Band-Song"];
+        for song in inputs {
             let tags = build_tags(song, true).unwrap();
             assert_eq!(tags["author"], "Band");
             assert_eq!(tags["title"], "Song");
@@ -382,119 +388,92 @@ mod tests {
     }
 
     #[test]
-    fn test_author() {
-        let tags = build_tags("Artist & Band - Song", true).unwrap();
-        assert_eq!(tags["author"], "Artist&Band");
-
-        let tags = build_tags("Artist, Other & Another - Song", true).unwrap();
-        assert_eq!(tags["author"], "Artist&Other&Another");
-
-        let tags = build_tags("Artist ft. Other - Song", true).unwrap();
-        assert_eq!(tags["author"], "Artist&Other");
-
-        let tags = build_tags("Artist & Band feat. Other - Song", true).unwrap();
-        assert_eq!(tags["author"], "Artist&Band&Other");
-
-        let tags = build_tags("Soft Artist - Song", true).unwrap();
-        assert_eq!(tags["author"], "Soft Artist");
-
-        let tags = build_tags("Artist - Song (feat.Band)", true).unwrap();
-        assert_eq!(tags["author"], "Artist&Band");
-
-        let tags = build_tags("Artist - Song w/Band", true).unwrap();
-        assert_eq!(tags["author"], "Artist&Band");
-
-        let tags = build_tags("Artist - Song W/Band", true).unwrap();
-        assert_eq!(tags["author"], "Artist&Band");
-
-        let tags = build_tags("Artist And Band - Song", true).unwrap();
-        assert_eq!(tags["author"], "Artist&Band");
+    fn parses_featuring_artists() {
+        let inputs = [
+            ("Artist & Band - Song", "Artist&Band"),
+            ("Artist, Other & Another - Song", "Artist&Other&Another"),
+            ("Artist ft. Other - Song", "Artist&Other"),
+            ("Artist & Band feat. Other - Song", "Artist&Band&Other"),
+            ("Soft Artist - Song", "Soft Artist"),
+            ("Artist - Song (feat.Band)", "Artist&Band"),
+            ("Artist - Song w/Band", "Artist&Band"),
+            ("Artist - Song W/Band", "Artist&Band"),
+        ];
+        for (song, expected) in inputs {
+            let tags = build_tags(song, true).unwrap();
+            assert_eq!(tags["author"], expected);
+        }
     }
 
     #[test]
-    fn test_year() {
-        let tags = build_tags("Band - Song (2024)", true).unwrap();
-        assert_eq!(tags["author"], "Band");
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags["year"], "2024");
-
-        let tags = build_tags("Band - Song 2024", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags["year"], "2024");
-
-        let tags = build_tags("Band - Song", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags.get("year"), None);
+    fn parses_year() {
+        let year = String::from("2024");
+        let inputs = [
+            ("Band - Song (2024)", Some(&year)),
+            ("Band - Song 2024", Some(&year)),
+            ("Band - Song", None),
+        ];
+        for (song, expected) in inputs {
+            let tags = build_tags(song, true).unwrap();
+            assert_eq!(tags["author"], "Band");
+            assert_eq!(tags["title"], "Song");
+            assert_eq!(tags.get("year"), expected);
+        }
     }
 
     #[test]
-    fn test_remix() {
-        let tags = build_tags("Artist - Song [Club Remix]", true).unwrap();
-        assert_eq!(tags["author"], "Artist");
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags["remix"], "Club Remix");
+    fn parses_remix() {
+        let inputs = [
+            ("Band - Song [Club Remix]", "Club Remix"),
+            ("Band - Song [Instrumental]", "Instrumental"),
+            ("Band - Song (HQ REMASTER)", "HQ REMASTER"),
+            ("Band - Song (Extended)", "Extended"),
+            ("Band - Song (Extended Mix)", "Extended Mix"),
+            ("Band - Song (Radio Edit)", "Radio Edit"),
+            ("Band - Song (Edit)", "Edit"),
+        ];
+        for (song, expected) in inputs {
+            let tags = build_tags(song, true).unwrap();
+            assert_eq!(tags["author"], "Band");
+            assert_eq!(tags["title"], "Song");
+            assert_eq!(tags["remix"], expected);
+        }
+    }
 
-        let tags = build_tags("Artist- Song (HQ REMASTER)", true).unwrap();
-        assert_eq!(tags["author"], "Artist");
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags["remix"], "HQ REMASTER");
+    #[test]
+    fn strips_useless_info() {
+        let inputs = [
+            ("Artist - Song [HQ]", "HQ"),
+            ("Artist - Song [HD]", "HD"),
+            ("Artist - Song [M/V]", "M/V"),
+            (
+                "Artist - Song (Official Music Video)",
+                "Official Music Video",
+            ),
+            ("Artist - Song (Official Video)", "Official Video"),
+            ("Artist - Song (Music Video)", "Music Video"),
+        ];
+        for (song, _expected) in inputs {
+            let tags = build_tags(song, true).unwrap();
+            assert_eq!(tags["author"], "Artist");
+            assert_eq!(tags["title"], "Song");
+            assert_eq!(tags.get("remix"), None);
+            assert_eq!(tags.len(), 2);
+            // assert_eq!(tags["strip"], expected);
+        }
+    }
 
+    #[test]
+    fn parses_complex_title() {
         let tags = build_tags("Artist & Band - Song (radio mix) 2003", true).unwrap();
         assert_eq!(tags["author"], "Artist&Band");
         assert_eq!(tags["title"], "Song");
         assert_eq!(tags["remix"], "radio mix");
         assert_eq!(tags["year"], "2003");
-
-        let tags = build_tags("Artist - Song [Instrumental]", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags["remix"], "Instrumental");
-
-        let tags = build_tags("Artist - Song (Extended)", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags["remix"], "Extended");
-
-        let tags = build_tags("Artist - Song (Extended Mix)", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags["remix"], "Extended Mix");
-
-        let tags = build_tags("Artist - Song (Radio Edit)", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags["remix"], "Radio Edit");
-
-        let tags = build_tags("Artist - Song (Edit)", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags["remix"], "Edit");
     }
 
     #[test]
-    fn test_strip() {
-        let tags = build_tags("Artist - Song [HQ]", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags.get("remix"), None);
-
-        let tags = build_tags("Artist - Song [HD]", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags.get("remix"), None);
-
-        let tags = build_tags("Artist - Song [M/V]", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags.get("remix"), None);
-
-        let tags = build_tags("Artist - Song (Official Music Video)", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags.get("remix"), None);
-
-        let tags = build_tags("Artist - Song (Official Video)", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags.get("remix"), None);
-
-        let tags = build_tags("Artist - Song (Music Video)", true).unwrap();
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags.get("remix"), None);
-    }
-
-    #[test]
-    fn test_from_format() {
+    fn parses_from_format() {
         let tags = build_tags("「Deep House」[DJ Test] My House", true).unwrap();
         assert_eq!(tags["author"], "DJ Test");
         assert_eq!(tags["title"], "My House");
