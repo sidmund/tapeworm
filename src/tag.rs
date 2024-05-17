@@ -290,7 +290,10 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
         if let Some(remix) = caps.name("remix") {
             let remix = remix.as_str();
             title = util::remove_str_from_string(title, remix);
-            tags.insert("remix", util::remove_brackets(remix));
+            let remix = util::remove_brackets(remix);
+            if remix.to_lowercase() != "original mix" {
+                tags.insert("remix", remix);
+            }
         }
 
         if let Some(album) = caps.name("album") {
@@ -397,23 +400,20 @@ mod tests {
     #[test]
     fn strips_useless_info() {
         let inputs = [
-            ("Artist - Song [HQ]", "HQ"),
-            ("Artist - Song [HD]", "HD"),
-            ("Artist - Song [M/V]", "M/V"),
-            (
-                "Artist - Song (Official Music Video)",
-                "Official Music Video",
-            ),
-            ("Artist - Song (Official Video)", "Official Video"),
-            ("Artist - Song (Music Video)", "Music Video"),
+            "Artist - Song [HQ]",
+            "Artist - Song [HD]",
+            "Artist - Song [M/V]",
+            "Artist - Song (Official Music Video)",
+            "Artist - Song (Official Video)",
+            "Artist - Song (Music Video)",
+            "Artist - Song [Original Mix]",
         ];
-        for (song, _expected) in inputs {
+        for song in inputs {
             let tags = build_tags(song, true).unwrap();
             assert_eq!(tags["author"], "Artist");
             assert_eq!(tags["title"], "Song");
             assert_eq!(tags.get("remix"), None);
             assert_eq!(tags.len(), 2);
-            // assert_eq!(tags["strip"], expected);
         }
     }
 
