@@ -12,7 +12,7 @@ use std::path::PathBuf;
 use std::process;
 use url::Url;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Config {
     pub command: String,
     pub library: Option<String>,
