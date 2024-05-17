@@ -159,7 +159,7 @@ where
 /// Separates a string like "Band ft Artist, Musician & Singer"
 /// into a vector like ["Band", "Artist", "Musician", "Singer"].
 fn separate_authors(s: &str) -> Vec<String> {
-    let re = Regex::new(r"(?i)(\sand\s|(^|\s)featuring|(^|\s)feat\.?|(^|\s)ft\.?|(^|\s)w[⧸/]|&|,|，)");
+    let re = Regex::new(r"(?i)(\sx\s|\sand\s|(^|\s)featuring|(^|\s)feat\.?|(^|\s)ft\.?|(^|\s)w[⧸/]|&|,|，)");
     re.unwrap().split(s).map(|a| a.trim().to_string()).collect()
 }
 
@@ -264,7 +264,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
         (?<year>\(\d{4}\)|\d{4}) |
         (?<remix>[\[({<][^\[\](){}<>]*(cut|edit|extended(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
         (?<album>【[^【】]*(?<album_rmv>F.C)[^【】]*】) |
-        (?<strip>[\[({<][^\[\](){}<>]*((official\s)?(music\s)?video|m/?v|hq|hd)[^\[\](){}<>]*[\])}>])
+        (?<strip>[\[({<][^\[\](){}<>]*(full\sversion|(official\s)?(music\s)?video|m/?v|hq|hd)[^\[\](){}<>]*[\])}>])
         ",
     );
 
@@ -356,6 +356,7 @@ mod tests {
             ("Artist - Song w/Band", "Artist&Band"),
             ("Artist - Song W/Band", "Artist&Band"),
             ("Artist ， Band - Song", "Artist&Band"),
+            ("Artist x Band - Song", "Artist&Band"),
         ];
         for (song, expected) in inputs {
             let tags = build_tags(song, true).unwrap();
@@ -409,6 +410,7 @@ mod tests {
             "Artist - Song (Official Video)",
             "Artist - Song (Music Video)",
             "Artist - Song [Original Mix]",
+            "Artist - Song [Full version]",
         ];
         for song in inputs {
             let tags = build_tags(song, true).unwrap();
