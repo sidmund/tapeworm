@@ -28,99 +28,51 @@ pub fn tag(config: &Config) -> types::UnitResult {
         let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
         println!("Tagging {} of {}: {}", i + 1, total, filename);
 
-        let mut entry_tag = Tag::new().read_from_path(entry)?;
-        let title = entry_tag.title();
-        if title.is_none() {
-            println!("  No 'title' tag found, skipping");
+        let mut ftag = Tag::new().read_from_path(entry)?;
+
+        let title = ftag.title().unwrap_or("").to_string();
+        let tags = if let Some(tags) = build_tags(title.as_str(), config.verbose) {
+            tags
+        } else {
+            println!("  No 'title' tag, or no extra info extracted, skipping");
             continue;
-        }
-
-        let title = String::from(title.unwrap());
-        let tags = build_tags(title.as_str(), config.verbose);
-        if tags.is_none() {
-            println!("  No additional tags found in title, skipping");
-            continue;
-        }
-        let tags = tags.unwrap();
-
-        let mut year = None;
-        if let Some(y) = tags.get("year") {
-            if let Ok(y) = y.parse::<i32>() {
-                year = Some(y);
-            } else {
-                eprintln!("year is not a number: {}, discarding", y);
-            }
-        }
-
-        let old_album = if let Some(a) = entry_tag.album() {
-            Some(String::from(a.title))
-        } else {
-            None
-        };
-        let album = if let Some(album) = tags.get("album") {
-            Some(album.to_owned())
-        } else {
-            None
         };
 
-        let mut title = if let Some(title) = tags.get("title") {
-            Some(title.to_owned())
-        } else {
-            None
-        };
+        let year = tags.get("year").map(|y| y.parse::<i32>().ok()).unwrap();
+        let genre = tags.get("genre").map(|g| g.as_str());
+        let old_album = ftag.album().map(|a| String::from(a.title));
+        let album = tags.get("album").map(|a| a.to_owned());
+        let old_album_artist = ftag.album_artist().map(|a| String::from(a));
+        let old_artist = ftag.artist().map(|a| String::from(a));
+        let mut artist: Option<String> = None;
+        let mut title = tags.get("title").map(|t| t.to_owned());
 
-        let old_album_artist = if let Some(a) = entry_tag.album_artist() {
-            Some(String::from(a))
-        } else {
-            None
-        };
-
-        let mut old_artist = None;
-        let mut artist = None;
-        let mut feat: HashSet<String> = HashSet::new();
-        if let Some(a) = entry_tag.artist() {
-            old_artist = Some(String::from(a));
-            if !config.override_artist {
-                let mut multiple = separate_authors(&old_artist.clone().unwrap());
-                artist = Some(multiple.remove(0));
-                let multiple = multiple
-                    .into_iter()
-                    .filter(|s| s != &artist.clone().unwrap());
-                feat.extend(multiple);
-            }
+        // Obtain all artists
+        let mut multiple = HashSet::new(); // No dupes
+        if old_artist.is_some() && !config.override_artist {
+            multiple.extend(separate_authors(&old_artist.clone().unwrap()));
         }
-
         if let Some(author) = tags.get("author") {
-            let mut multiple: Vec<String> = author.split("&").map(|s| s.to_string()).collect();
-            if artist.is_none() {
-                artist = Some(multiple.remove(0)); // First is treated as main artist
-                let multiple = multiple
-                    .into_iter()
-                    .filter(|s| s != &artist.clone().unwrap());
-                feat.extend(multiple);
-            } else {
-                feat.extend(multiple);
+            multiple.extend(author.split("&").map(|s| s.to_string()));
+        }
+
+        if !multiple.is_empty() {
+            let mut multiple = multiple.iter().map(|s| s.to_owned());
+            artist = Some(multiple.next().unwrap()); // First is treated as main artist
+
+            // Modify the title with 'featuring' info for the remaining artists, e.g. "Song (Alice, Bob & Charlie)"
+            if let Some(mut feat) = multiple.reduce(|a, b| format!("{}, {}", a, b)) {
+                if let Some(i) = feat.rfind(',') {
+                    feat.replace_range(i..=i, " &");
+                }
+                title = Some(format!("{} ({})", title.unwrap_or(String::new()), feat));
             }
         }
 
-        // Modify the title so it includes the featuring artists, e.g. "(ARTIST, ARTIST & ARTIST)"
-        let feat: HashSet<String> = feat.into_iter().collect(); // Remove dupes
-        if let Some(mut feat) = feat.into_iter().reduce(|a, b| format!("{}, {}", a, b)) {
-            if let Some(i) = feat.rfind(',') {
-                feat.replace_range(i..=i, " &");
-            }
-            title = Some(format!("{} ({})", title.unwrap_or(String::new()), feat));
-        }
-
+        // Modify the title with 'remix' info, e.g. "Song (Alice) [Radio Edit]"
         if let Some(remix) = tags.get("remix") {
             title = Some(format!("{} [{}]", title.unwrap_or(String::new()), remix));
         }
-
-        let genre = if let Some(g) = tags.get("genre") {
-            Some(g.as_str())
-        } else {
-            None
-        };
 
         let new_filename = if let Some(artist) = artist.clone() {
             if let Some(title) = title.clone() {
@@ -129,7 +81,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
                 format!("{}.mp3", artist)
             }
         } else if let Some(title) = title.clone() {
-            if let Some(tag_artist) = entry_tag.artist() {
+            if let Some(tag_artist) = ftag.artist() {
                 // When filename led to only title being extracted, but the artist tag was set by
                 // yt-dlp, e.g. "Song.mp3" only gives tags "title: Song" but yt-dlp set the artist
                 format!("{} - {}.mp3", tag_artist, title)
@@ -146,38 +98,34 @@ pub fn tag(config: &Config) -> types::UnitResult {
             print_proposal("ALBUM_ARTIST", &old_album_artist, &artist);
         }
         print_proposal("ALBUM", &old_album, &album);
-        print_proposal(
-            "TITLE",
-            &entry_tag.title(),
-            &title.as_ref().map(|s| s.as_str()),
-        );
-        print_proposal("YEAR", &entry_tag.year(), &year);
-        print_proposal("GENRE", &entry_tag.genre(), &genre);
+        print_proposal("TITLE", &ftag.title(), &title.as_ref().map(|s| s.as_str()));
+        print_proposal("YEAR", &ftag.year(), &year);
+        print_proposal("GENRE", &ftag.genre(), &genre);
         print_proposal("FILENAME", &Some(&filename), &Some(&new_filename));
 
         if util::confirm("Accept these changes?", true)? {
             // Write tags
             if let Some(artist) = artist.clone() {
-                entry_tag.set_artist(&artist);
+                ftag.set_artist(&artist);
             }
             if old_album.is_some() || album.is_some() {
                 if let Some(artist) = artist {
-                    entry_tag.set_album_artist(&artist);
+                    ftag.set_album_artist(&artist);
                 }
             }
             if let Some(album) = album {
-                entry_tag.set_album_title(album.as_str());
+                ftag.set_album_title(album.as_str());
             }
             if let Some(title) = title {
-                entry_tag.set_title(title.as_str());
+                ftag.set_title(title.as_str());
             }
             if let Some(year) = year {
-                entry_tag.set_year(year);
+                ftag.set_year(year);
             }
             if let Some(genre) = genre {
-                entry_tag.set_genre(genre);
+                ftag.set_genre(genre);
             }
-            entry_tag.write_to_path(entry.to_str().unwrap())?;
+            ftag.write_to_path(entry.to_str().unwrap())?;
 
             if new_filename != filename {
                 fs::rename(entry, entry.with_file_name(new_filename))?;
@@ -196,14 +144,15 @@ where
         if new.is_some() {
             println!("  {:<15} N/A\n{:<20}-> {}", name, "", new.as_ref().unwrap());
         } // No need to print anything when both are none
+        return;
+    }
+
+    let old = old.as_ref().unwrap();
+    if new.is_none() || new.as_ref().is_some_and(|x| *x == *old) {
+        println!("  {:<15} {}\n{:<20}(keep as is)", name, old, "");
     } else {
-        let old = old.as_ref().unwrap();
-        if new.is_none() || new.as_ref().is_some_and(|x| *x == *old) {
-            println!("  {:<15} {}\n{:<20}(keep as is)", name, old, "");
-        } else {
-            let new = new.as_ref().unwrap();
-            println!("  {:<15} {}\n{:<20}-> {}", name, old, "", new);
-        }
+        let new = new.as_ref().unwrap();
+        println!("  {:<15} {}\n{:<20}-> {}", name, old, "", new);
     }
 }
 
@@ -230,7 +179,6 @@ fn from_split(full_title: &str) -> Option<(Vec<String>, String)> {
             return Some((separate_authors(authors), title.trim().to_string()));
         }
     }
-
     None
 }
 
@@ -239,13 +187,13 @@ fn from_split(full_title: &str) -> Option<(Vec<String>, String)> {
 /// # Parameters
 /// - `full_title`: expected to be in the format `「GENRE」[ARTIST] TITLE`
 fn from_format(full_title: &str, verbose: bool) -> (Option<&str>, Option<&str>, Option<&str>) {
-    let re = Regex::new(r"^「(?<genre>[^」]+)」\[(?<artist>[^\]]+)\]\s(?<title>.+)$").unwrap();
+    let re = Regex::new(r"^「(?<genre>[^」]+)」\[(?<artist>[^\]]+)\]\s(?<title>.+)$");
 
     let mut genre = None;
     let mut artist = None;
     let mut title = None;
 
-    for caps in re.captures_iter(full_title) {
+    for caps in re.unwrap().captures_iter(full_title) {
         if verbose {
             println!("Captures: {:?}", caps);
         }
@@ -264,15 +212,22 @@ fn from_format(full_title: &str, verbose: bool) -> (Option<&str>, Option<&str>, 
     (genre, artist, title)
 }
 
-/// Attempt to extract tags from the title metadata.
+/// Extract tags from the title metadata. It will attempt to extract the following:
 ///
-/// Returns None if no tags could be extracted.
-/// Otherwise, returns a HashMap with all found tags, a subset of:
 /// - author: a '&' separated list of authors
 /// - title: the title after removing other/spurious information
 /// - year
+/// - genre
 /// - remix: (re)mixes, remasters, bootlegs, instrumental are treated as 'remix'
+///
+/// # Returns
+/// - `None`: when the title is empty, or no tags were found
+/// - `Some(HashMap<&str, String>)`: the map of found tags, contains at least the 'title'
 fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> {
+    if meta_title.is_empty() {
+        return None;
+    }
+
     if verbose {
         println!("Parsing: {}", meta_title);
     }
@@ -369,7 +324,6 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
     if verbose {
         println!("Got tags: {:?}", tags);
     }
-
     Some(tags)
 }
 
