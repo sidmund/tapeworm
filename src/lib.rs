@@ -189,7 +189,7 @@ impl Config {
                         self.input_dir = args.next().map(PathBuf::from)
                     }
                     'd' if self.command == "deposit" || self.command == "process" => {
-                        self.organize = Some(args.next().unwrap())
+                        self.organize = args.next()
                     }
                     'o' if self.command == "deposit" || self.command == "process" => {
                         self.target_dir = args.next().map(PathBuf::from)

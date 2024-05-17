@@ -21,7 +21,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
 
     let downloads =
         PathBuf::from(config.lib_path.clone().unwrap()).join(config.input_dir.clone().unwrap());
-    let downloads: Vec<PathBuf> = util::filepaths_in(downloads).unwrap_or(vec![]);
+    let downloads: Vec<PathBuf> = util::filepaths_in(downloads)?;
     let total = downloads.len();
 
     for (i, entry) in downloads.iter().enumerate() {

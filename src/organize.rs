@@ -23,9 +23,22 @@ pub fn deposit(config: &Config) -> types::UnitResult {
         );
     }
 
+    let func = if let Some(mode) = &config.organize {
+        match mode.as_str() {
+            "A-Z" => organize,
+            _ => {
+                return Err(
+                    format!("Unrecognized organization mode: '{}'. See 'help'", mode).into(),
+                )
+            }
+        }
+    } else {
+        drop
+    };
+
     let downloads =
         PathBuf::from(config.lib_path.clone().unwrap()).join(config.input_dir.clone().unwrap());
-    let downloads: Vec<PathBuf> = util::filepaths_in(downloads).unwrap_or(vec![]);
+    let downloads: Vec<PathBuf> = util::filepaths_in(downloads)?;
     if downloads.is_empty() {
         return Ok(());
     }
@@ -34,20 +47,7 @@ pub fn deposit(config: &Config) -> types::UnitResult {
         PathBuf::from(config.lib_path.clone().unwrap()).join(config.target_dir.clone().unwrap());
     let target_dir = util::guarantee_dir_path(target_dir)?;
 
-    let errors = if let Some(mode) = &config.organize {
-        match mode.as_str() {
-            "A-Z" => organize(target_dir, downloads),
-            _ => {
-                return Err(
-                    format!("Unrecognized organization mode: '{}'. See 'help'", mode).into(),
-                )
-            }
-        }
-    } else {
-        drop(target_dir, downloads)
-    };
-
-    if let Some(errors) = errors {
+    if let Some(errors) = func(target_dir, downloads) {
         return Err(format!(
             "Could not move {} files to target directory:{}",
             errors.len(),
