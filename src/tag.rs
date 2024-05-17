@@ -262,7 +262,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
         r"(?xi)
         (?<feat>\((\sand\s|featuring|feat\.?|ft\.?|w[⧸/])[^\)]*\)|(\sand\s|featuring|feat\.?|ft\.?|w[⧸/])[^\)]*) |
         (?<year>\(\d{4}\)|\d{4}) |
-        (?<remix>[\[({<][^\[\](){}<>]*(edit|extended(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
+        (?<remix>[\[({<][^\[\](){}<>]*(cut|edit|extended(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
         (?<album>【[^【】]*(?<album_rmv>F.C)[^【】]*】) |
         (?<strip>[\[({<][^\[\](){}<>]*((official\s)?(music\s)?video|m/?v|hq|hd)[^\[\](){}<>]*[\])}>])
         ",
@@ -389,6 +389,7 @@ mod tests {
             ("Band - Song (Extended Mix)", "Extended Mix"),
             ("Band - Song (Radio Edit)", "Radio Edit"),
             ("Band - Song (Edit)", "Edit"),
+            ("Band - Song (Radio Cut)", "Radio Cut"),
         ];
         for (song, expected) in inputs {
             let tags = build_tags(song, true).unwrap();
