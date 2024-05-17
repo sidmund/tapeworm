@@ -159,7 +159,9 @@ where
 /// Separates a string like "Band ft Artist, Musician & Singer"
 /// into a vector like ["Band", "Artist", "Musician", "Singer"].
 fn separate_authors(s: &str) -> Vec<String> {
-    let re = Regex::new(r"(?i)(\sx\s|\sand\s|(^|\s)featuring|(^|\s)feat\.?|(^|\s)ft\.?|(^|\s)w[⧸/]|&|,|，)");
+    let re = Regex::new(
+        r"(?i)(\sx\s|\sand\s|(^|\s)featuring|(^|\s)feat\.?|(^|\s)ft\.?|(^|\s)w[⧸/]|&|,|，)",
+    );
     re.unwrap().split(s).map(|a| a.trim().to_string()).collect()
 }
 
@@ -182,34 +184,48 @@ fn from_split(full_title: &str) -> Option<(Vec<String>, String)> {
     None
 }
 
-/// Attempt to get the genre, artist, and title from the full title.
+/// Attempt to extract the following tags from the title:
+/// - genre
+/// - artist
+/// - title
+/// - extra
+/// The 'extra' group can be used to capture anything extra for independent further extraction,
+/// commonly this could be remix or featuring artist information.
 ///
 /// # Parameters
-/// - `full_title`: expected to be in the format `「GENRE」[ARTIST] TITLE`
-fn from_format(full_title: &str, verbose: bool) -> (Option<&str>, Option<&str>, Option<&str>) {
-    let re = Regex::new(r"^「(?<genre>[^」]+)」\[(?<artist>[^\]]+)\]\s(?<title>.+)$");
+/// - `format`: a regular expression with capture groups for any/all of the above tags
+/// - `full_title`: expected to be in the provided format
+///
+/// # Returns
+/// - `None`: if no tags were found (format could not capture anything)
+/// - `Some(HashMap)`: map of tag name to tag value
+fn from_format<'a, 'b>(
+    format: &'a str,
+    full_title: &'b str,
+    verbose: bool,
+) -> Option<HashMap<&'b str, &'b str>> {
+    let mut tags = HashMap::new();
 
-    let mut genre = None;
-    let mut artist = None;
-    let mut title = None;
-
-    for caps in re.unwrap().captures_iter(full_title) {
+    for caps in Regex::new(format).unwrap().captures_iter(full_title) {
         if verbose {
             println!("Captures: {:?}", caps);
         }
 
-        if let Some(m) = caps.name("genre") {
-            genre = Some(m.as_str());
-        }
-        if let Some(m) = caps.name("artist") {
-            artist = Some(m.as_str());
-        }
-        if let Some(m) = caps.name("title") {
-            title = Some(m.as_str());
+        for name in ["genre", "artist", "title", "extra"] {
+            if let Some(m) = caps.name(name) {
+                tags.insert(name, m.as_str());
+            }
         }
     }
 
-    (genre, artist, title)
+    if tags.is_empty() {
+        None
+    } else {
+        if verbose {
+            println!("Got tags: {:?}", tags);
+        }
+        Some(tags)
+    }
 }
 
 /// Extract tags from the title metadata. It will attempt to extract the following:
@@ -245,16 +261,27 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
         title = rest_title.clone();
         meta_title = rest_title;
     } else {
-        let (genre, artist, rest_title) = from_format(&meta_title, verbose);
-        if let Some(genre) = genre {
-            tags.insert("genre", genre.to_string());
-        }
-        if let Some(artist) = artist {
-            author.push(artist.to_string());
-        }
-        if let Some(rest_title) = rest_title {
-            title = rest_title.to_string();
-            meta_title = rest_title.to_string();
+        // Attempt to parse the title with any of the formats, stop as soon as one format can parse it
+        let formats = [
+            r"^「(?<genre>[^」]+)」\[(?<artist>[^\]]+)\]\s(?<title>.+)$", // 「GENRE」[ARTIST] TITLE
+            r"^(?<artist>[^'‘]+)\s['‘](?<title>[^'’]+)['’](?<extra>.+)?$", // ARTIST 'TITLE'EXTRA?
+        ];
+        for fmt in formats {
+            if let Some(tt) = from_format(fmt, &meta_title, verbose) {
+                if let Some(genre) = tt.get("genre") {
+                    tags.insert("genre", genre.to_string());
+                }
+                if let Some(artist) = tt.get("artist") {
+                    author.push(artist.to_string());
+                }
+                let rest_title = tt.get("title");
+                let extra = tt.get("extra").unwrap_or(&"");
+                if let Some(rest_title) = rest_title {
+                    title = format!("{}{}", rest_title.to_string(), extra);
+                    meta_title = format!("{}{}", rest_title.to_string(), extra);
+                }
+                break;
+            }
         }
     }
 
@@ -334,14 +361,78 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
 mod tests {
     use super::*;
 
+    /// Holds the expected values that should be extracted from the input
+    #[derive(Debug, Default)]
+    struct Song {
+        genre: Option<String>,
+        author: Option<String>,
+        title: Option<String>,
+        remix: Option<String>,
+        year: Option<String>,
+    }
+    impl Song {
+        fn check(input: &str, song: Song) {
+            let tags = build_tags(input, true).unwrap();
+            assert_eq!(tags.get("genre"), song.genre.as_ref());
+            assert_eq!(tags.get("author"), song.author.as_ref());
+            assert_eq!(tags.get("title"), song.title.as_ref());
+            assert_eq!(tags.get("remix"), song.remix.as_ref());
+            assert_eq!(tags.get("year"), song.year.as_ref());
+        }
+    }
+    macro_rules! song {
+        ($author: expr, $title: expr) => {
+            Song {
+                author: Some(String::from($author)),
+                title: Some(String::from($title)),
+                ..Default::default()
+            }
+        };
+        ($genre: expr, $author: expr, $title: expr) => {
+            Song {
+                genre: Some(String::from($genre)),
+                author: Some(String::from($author)),
+                title: Some(String::from($title)),
+                ..Default::default()
+            }
+        };
+    }
+    macro_rules! year {
+        ($author: expr, $title: expr, $year: expr) => {
+            Song {
+                author: Some(String::from($author)),
+                title: Some(String::from($title)),
+                year: Some(String::from($year)),
+                ..Default::default()
+            }
+        };
+    }
+    macro_rules! rmx {
+        ($author: expr, $title: expr, $remix: expr) => {
+            Song {
+                author: Some(String::from($author)),
+                title: Some(String::from($title)),
+                remix: Some(String::from($remix)),
+                ..Default::default()
+            }
+        };
+        ($author: expr, $title: expr, $remix: expr, $year: expr) => {
+            Song {
+                author: Some(String::from($author)),
+                title: Some(String::from($title)),
+                remix: Some(String::from($remix)),
+                year: Some(String::from($year)),
+                ..Default::default()
+            }
+        };
+    }
+
     #[test]
     fn parses_spacing() {
-        let inputs = ["Band - Song", "Band- Song", "Band -Song", "Band-Song"];
-        for song in inputs {
-            let tags = build_tags(song, true).unwrap();
-            assert_eq!(tags["author"], "Band");
-            assert_eq!(tags["title"], "Song");
-        }
+        Song::check("Band - Song", song!("Band", "Song"));
+        Song::check("Band- Song", song!("Band", "Song"));
+        Song::check("Band -Song", song!("Band", "Song"));
+        Song::check("Band-Song", song!("Band", "Song"));
     }
 
     #[test]
@@ -358,26 +449,15 @@ mod tests {
             ("Artist ， Band - Song", "Artist&Band"),
             ("Artist x Band - Song", "Artist&Band"),
         ];
-        for (song, expected) in inputs {
-            let tags = build_tags(song, true).unwrap();
-            assert_eq!(tags["author"], expected);
+        for (input_str, expected_output) in inputs {
+            Song::check(input_str, song!(expected_output, "Song"));
         }
     }
 
     #[test]
     fn parses_year() {
-        let year = String::from("2024");
-        let inputs = [
-            ("Band - Song (2024)", Some(&year)),
-            ("Band - Song 2024", Some(&year)),
-            ("Band - Song", None),
-        ];
-        for (song, expected) in inputs {
-            let tags = build_tags(song, true).unwrap();
-            assert_eq!(tags["author"], "Band");
-            assert_eq!(tags["title"], "Song");
-            assert_eq!(tags.get("year"), expected);
-        }
+        Song::check("Band - Song (2024)", year!("Band", "Song", "2024"));
+        Song::check("Band - Song 2024", year!("Band", "Song", "2024"));
     }
 
     #[test]
@@ -392,11 +472,8 @@ mod tests {
             ("Band - Song (Edit)", "Edit"),
             ("Band - Song (Radio Cut)", "Radio Cut"),
         ];
-        for (song, expected) in inputs {
-            let tags = build_tags(song, true).unwrap();
-            assert_eq!(tags["author"], "Band");
-            assert_eq!(tags["title"], "Song");
-            assert_eq!(tags["remix"], expected);
+        for (input_str, expected_output) in inputs {
+            Song::check(input_str, rmx!("Band", "Song", expected_output));
         }
     }
 
@@ -412,29 +489,17 @@ mod tests {
             "Artist - Song [Original Mix]",
             "Artist - Song [Full version]",
         ];
-        for song in inputs {
-            let tags = build_tags(song, true).unwrap();
-            assert_eq!(tags["author"], "Artist");
-            assert_eq!(tags["title"], "Song");
-            assert_eq!(tags.get("remix"), None);
-            assert_eq!(tags.len(), 2);
+        for input_str in inputs {
+            Song::check(input_str, song!("Artist", "Song"));
         }
     }
 
     #[test]
-    fn parses_complex_title() {
-        let tags = build_tags("Artist & Band - Song (radio mix) 2003", true).unwrap();
-        assert_eq!(tags["author"], "Artist&Band");
-        assert_eq!(tags["title"], "Song");
-        assert_eq!(tags["remix"], "radio mix");
-        assert_eq!(tags["year"], "2003");
-    }
-
-    #[test]
-    fn parses_from_format() {
-        let tags = build_tags("「Deep House」[DJ Test] My House", true).unwrap();
-        assert_eq!(tags["author"], "DJ Test");
-        assert_eq!(tags["title"], "My House");
-        assert_eq!(tags["genre"], "Deep House");
+    fn parses_complex_formats() {
+        Song::check("A & B - S (a mix) 2003", rmx!("A&B", "S", "a mix", "2003"));
+        Song::check("「Big」[Band] Song", song!("Big", "Band", "Song"));
+        Song::check("Artist 'Title'", song!("Artist", "Title"));
+        Song::check("Artist 'Title' (Edit)", rmx!("Artist", "Title", "Edit"));
+        Song::check("Artist ‘Title’ (Feat. Band)", song!("Artist&Band", "Title"));
     }
 }
