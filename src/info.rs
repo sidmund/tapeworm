@@ -7,14 +7,6 @@ use std::path::PathBuf;
 
 /// Show the library's discovered config files.
 pub fn show(config: &Config) -> types::UnitResult {
-    if fs::metadata(&config.lib_path.clone().unwrap()).is_err() {
-        return Err(format!(
-            "Library not found: {}",
-            config.lib_path.clone().unwrap().to_str().unwrap()
-        )
-        .into());
-    }
-
     println!("LIBRARY: {}", config.library.clone().unwrap());
     if let Some(desc) = &config.lib_desc {
         println!("DESC: \"{}\"", desc);

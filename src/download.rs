@@ -9,14 +9,6 @@ use std::io::{BufRead, BufReader, ErrorKind};
 use std::process::{Command, Stdio};
 
 pub fn download(config: &Config) -> types::UnitResult {
-    if fs::metadata(&config.lib_path.clone().unwrap()).is_err() {
-        return Err(format!(
-            "Library not found: {}",
-            config.lib_path.clone().unwrap().to_str().unwrap()
-        )
-        .into());
-    }
-
     let use_yt_dlp_conf = if let Some(value) = yt_dlp_conf_exists(config)? {
         value
     } else {

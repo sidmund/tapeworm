@@ -61,6 +61,8 @@ impl Config {
         }
     }
 
+    /// Set up the library paths. If building for a command that is not "add",
+    /// this will error if the library does not exist.
     fn parse_library(&mut self, library: Option<String>) -> types::UnitResult {
         if library.is_none() {
             return Err("Library not specified. See 'help'".into());
@@ -71,6 +73,14 @@ impl Config {
         let lib_path = PathBuf::from(dirs::config_dir().unwrap())
             .join("tapeworm")
             .join(library.clone());
+
+        if self.command != "add" && fs::metadata(&lib_path).is_err() {
+            return Err(format!(
+                "Library not found: {}",
+                lib_path.to_str().unwrap()
+            )
+            .into());
+        }
 
         let mut lib_conf_path = lib_path.join("lib");
         lib_conf_path.set_extension("conf");

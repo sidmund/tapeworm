@@ -23,11 +23,11 @@ fn fails_without_library() {
 
 #[test]
 fn fails_with_non_existing_library() {
-    assert!(run(setup(vec!["show", "tw-test-gaf9843uj3nrj"]).unwrap()).is_err());
-    assert!(run(setup(vec!["download", "tw-test-i1g491osf"]).unwrap()).is_err());
-    assert!(run(setup(vec!["tag", "tw-test-a98w46yfha0huf"]).unwrap()).is_err());
-    assert!(run(setup(vec!["deposit", "tw-test-9732tryafo"]).unwrap()).is_err());
-    assert!(run(setup(vec!["process", "tw-test-aiyeq29a48"]).unwrap()).is_err());
+    assert!(setup(vec!["show", "tw-test-gaf9843uj3nrj"]).is_err());
+    assert!(setup(vec!["download", "tw-test-i1g491osf"]).is_err());
+    assert!(setup(vec!["tag", "tw-test-a98w46yfha0huf"]).is_err());
+    assert!(setup(vec!["deposit", "tw-test-9732tryafo"]).is_err());
+    assert!(setup(vec!["process", "tw-test-aiyeq29a48"]).is_err());
 }
 
 #[test]
@@ -260,3 +260,16 @@ fn fails_deposit_on_incorrect_args() {
 
 #[test]
 fn deposits() {}
+
+#[test]
+fn fails_to_process_without_steps() {
+    let test_lib = PathBuf::from(dirs::config_dir().unwrap())
+        .join("tapeworm")
+        .join("tw-test-no-steps");
+    fs::create_dir_all(&test_lib).unwrap();
+
+    let config = setup(vec!["process", "tw-test-no-steps"]).unwrap();
+    assert!(run(config).is_err());
+
+    fs::remove_dir_all(&test_lib).unwrap(); // cleanup
+}
