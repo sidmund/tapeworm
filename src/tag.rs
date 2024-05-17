@@ -38,7 +38,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
             continue;
         };
 
-        let year = tags.get("year").map(|y| y.parse::<i32>().ok()).unwrap();
+        let year = tags.get("year").map(|y| y.parse::<i32>().ok().unwrap());
         let genre = tags.get("genre").map(|g| g.as_str());
         let old_album = ftag.album().map(|a| String::from(a.title));
         let album = tags.get("album").map(|a| a.to_owned());
