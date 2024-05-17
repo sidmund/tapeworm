@@ -26,15 +26,26 @@ pub fn tag(config: &Config) -> types::UnitResult {
 
     for (i, entry) in downloads.iter().enumerate() {
         let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
-        println!("Tagging {} of {}: {}", i + 1, total, filename);
+        println!("\nTagging {} of {}: {}", i + 1, total, filename);
 
-        let mut ftag = Tag::new().read_from_path(entry)?;
+        let ftag = Tag::new().read_from_path(entry);
+        if let Err(e) = ftag {
+            println!("! {}, skipping", e);
+            continue;
+        }
+        let mut ftag = ftag.unwrap();
 
-        let title = ftag.title().unwrap_or("").to_string();
-        let tags = if let Some(tags) = build_tags(title.as_str(), config.verbose) {
+        let title = if let Some(title) = ftag.title() {
+            String::from(title)
+        } else {
+            println!("! No 'title' tag present, skipping");
+            continue;
+        };
+
+        let tags = if let Some(tags) = build_tags(title.trim(), config.verbose) {
             tags
         } else {
-            println!("  No 'title' tag, or no extra info extracted, skipping");
+            println!("! No extra tags extracted from 'title', skipping");
             continue;
         };
 

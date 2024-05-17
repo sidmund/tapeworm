@@ -165,7 +165,6 @@ fn fails_tag_on_incorrect_args() {
 }
 
 #[test]
-#[ignore]
 fn tags() {
     // Create the library dir
     let lib = "tw-test-tag";
@@ -179,12 +178,13 @@ fn tags() {
 
     // Copy an untagged resource file to the lib dir
     let res_path = common::get_resources();
-    let mp3_path = res_path.join("rickroll.mp3");
-    fs::copy(mp3_path, lib_path.join("rickroll.mp3")).unwrap();
+    let mp3_path = res_path.join("song.mp3");
+    fs::copy(mp3_path, lib_path.join("song.mp3")).unwrap();
+    // Test that run succeeds, and the file is simply skipped when no tag present
+    run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
 
     // TODO how to pass input so we dont have to interact with the test?
     // I think i'll just make a cli/lib.conf option for it
-    run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
 
     // TODO verify that mp3 has at least the title tag
     // TODO test tag::tag (whatever is not covered by unit tests)
