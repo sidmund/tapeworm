@@ -50,6 +50,7 @@ pub fn tag<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
             continue;
         };
 
+        let track_no = tags.get("track_no").map(|n| n.parse::<u16>().ok().unwrap());
         let year = tags.get("year").map(|y| y.parse::<i32>().ok().unwrap());
         let genre = tags.get("genre").map(|g| g.as_str());
         let old_album = ftag.album().map(|a| String::from(a.title));
@@ -110,6 +111,7 @@ pub fn tag<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
             print_proposal("ALBUM_ARTIST", &old_album_artist, &artist);
         }
         print_proposal("ALBUM", &old_album, &album);
+        print_proposal("TRACK", &ftag.track_number(), &track_no);
         print_proposal("TITLE", &ftag.title(), &title.as_ref().map(|s| s.as_str()));
         print_proposal("YEAR", &ftag.year(), &year);
         print_proposal("GENRE", &ftag.genre(), &genre);
@@ -127,6 +129,9 @@ pub fn tag<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
             }
             if let Some(album) = album {
                 ftag.set_album_title(album.as_str());
+            }
+            if let Some(track_no) = track_no {
+                ftag.set_track_number(track_no);
             }
             if let Some(title) = title {
                 ftag.set_title(title.as_str());
@@ -175,29 +180,11 @@ fn separate_authors(s: &str) -> Vec<String> {
     re.unwrap().split(s).map(|a| a.trim().to_string()).collect()
 }
 
-/// Attempt to split the full title into an author (left) and title (right) part.
-///
-/// # Returns
-/// - `None`: when the title could not be split
-/// - `Some(Vec<String>, String)`: a list of authors and the rest of the title
-///
-/// # Example
-/// For the input "Band ft Artist, Musician & Singer - Song",
-/// the returned authors are ["Band", "Artist", "Musician", "Singer"]
-/// and the returned title is "Song".
-fn from_split(full_title: &str) -> Option<(Vec<String>, String)> {
-    for delim in "-_~｜".chars() {
-        if let Some((authors, title)) = full_title.split_once(delim) {
-            return Some((separate_authors(authors), title.trim().to_string()));
-        }
-    }
-    None
-}
-
 /// Attempt to extract the following tags from the title:
 /// - genre
-/// - artist
+/// - artists: can be a single artist or multiple, e.g. "Band", "Artist ft Singer"
 /// - title
+/// - track_no
 /// - extra
 /// The 'extra' group can be used to capture anything extra for independent further extraction,
 /// commonly this could be remix or featuring artist information.
@@ -221,7 +208,7 @@ fn from_format<'a, 'b>(
             println!("\nUsing Regex: {}\n{:#?}", format, caps);
         }
 
-        for name in ["genre", "artist", "title", "extra"] {
+        for name in ["genre", "artists", "title", "track_no", "extra"] {
             if let Some(m) = caps.name(name) {
                 tags.insert(name, m.as_str());
             }
@@ -245,6 +232,7 @@ fn from_format<'a, 'b>(
 /// - year
 /// - genre
 /// - remix: (re)mixes, remasters, bootlegs, instrumental are treated as 'remix'
+/// - track_no
 ///
 /// # Returns
 /// - `None`: when the title is empty, or no tags were found
@@ -266,32 +254,35 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
     let mut title = meta_title.to_string();
     let mut author: Vec<String> = Vec::new();
 
-    if let Some((authors, rest_title)) = from_split(&meta_title) {
-        author.extend(authors);
-        title = rest_title.clone();
-        meta_title = rest_title;
-    } else {
-        // Attempt to parse the title with any of the formats, stop as soon as one format can parse it
-        let formats = [
-            r"^「(?<genre>[^」]+)」\[(?<artist>[^\]]+)\]\s(?<title>.+)$", // 「GENRE」[ARTIST] TITLE
-            r"^(?<artist>[^'‘]+)\s['‘](?<title>[^'’]+)['’](?<extra>.+)?$", // ARTIST 'TITLE'EXTRA?
-        ];
-        for fmt in formats {
-            if let Some(tt) = from_format(fmt, &meta_title, verbose) {
-                if let Some(genre) = tt.get("genre") {
-                    tags.insert("genre", genre.to_string());
-                }
-                if let Some(artist) = tt.get("artist") {
-                    author.push(artist.to_string());
-                }
-                let rest_title = tt.get("title");
-                let extra = tt.get("extra").unwrap_or(&"");
-                if let Some(rest_title) = rest_title {
-                    title = format!("{}{}", rest_title.to_string(), extra);
-                    meta_title = format!("{}{}", rest_title.to_string(), extra);
-                }
-                break;
+    // Attempt to parse the title with any of the formats, stop as soon as one format can parse it
+    let formats = [
+        r"^「(?<genre>[^」]+)」\[(?<artists>[^\]]+)\]\s(?<title>.+)$", // 「GENRE」[ARTISTS] TITLE
+        r"^(?<artists>[^'‘]+)\s['‘](?<title>[^'’]+)['’](?<extra>.+)?$", // ARTISTS 'TITLE'EXTRA?
+        r"^(?<track_no>\d+\.)?(?<artists>[^-_~｜]+)[-_~｜](?<title>.+)$", // TRACK_NO.? ARTISTS - TITLE
+    ];
+    for fmt in formats {
+        if let Some(tt) = from_format(fmt, &meta_title, verbose) {
+            if let Some(genre) = tt.get("genre") {
+                tags.insert("genre", genre.to_string());
             }
+            if let Some(track_no) = tt.get("track_no") {
+                let track_no = track_no.to_string();
+                title = util::remove_str_from_string(title, &track_no);
+                let track_no = String::from(&track_no[..track_no.len() - 1]); // Omit "."
+                tags.insert("track_no", track_no);
+            }
+            if let Some(artists) = tt.get("artists") {
+                author.extend(separate_authors(artists));
+            }
+            let rest_title = tt.get("title");
+            let extra = tt.get("extra").unwrap_or(&"");
+            if let Some(rest_title) = rest_title {
+                let rest_title = rest_title.trim();
+                let extra = extra.trim();
+                title = format!("{}{}", rest_title.to_string(), extra);
+                meta_title = format!("{}{}", rest_title.to_string(), extra);
+            }
+            break;
         }
     }
 
@@ -301,7 +292,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
         (?<year>\(\d{4}\)|\d{4}) |
         (?<remix>[\[({<][^\[\](){}<>]*(cut|edit|extended(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
         (?<album>【[^【】]*(?<album_rmv>F.C)[^【】]*】) |
-        (?<strip>[\[({<][^\[\](){}<>]*(full\sversion|(official\s)?(music\s)?video|m/?v|hq|hd)[^\[\](){}<>]*[\])}>])
+        (?<strip>[\[({<][^\[\](){}<>]*(full\sversion|(official\s)?((music\s)?video|audio)|m/?v|hq|hd)[^\[\](){}<>]*[\])}>])
         ",
     );
 
@@ -379,6 +370,7 @@ mod tests {
         title: Option<String>,
         remix: Option<String>,
         year: Option<String>,
+        track_no: Option<String>,
     }
     impl Song {
         fn check(input: &str, song: Song) {
@@ -388,6 +380,7 @@ mod tests {
             assert_eq!(tags.get("title"), song.title.as_ref());
             assert_eq!(tags.get("remix"), song.remix.as_ref());
             assert_eq!(tags.get("year"), song.year.as_ref());
+            assert_eq!(tags.get("track_no"), song.track_no.as_ref());
         }
     }
     macro_rules! song {
@@ -436,6 +429,16 @@ mod tests {
             }
         };
     }
+    macro_rules! album {
+        ($track_no: expr, $author: expr, $title: expr) => {
+            Song {
+                track_no: Some(String::from($track_no)),
+                author: Some(String::from($author)),
+                title: Some(String::from($title)),
+                ..Default::default()
+            }
+        };
+    }
 
     #[test]
     fn parses_spacing() {
@@ -471,6 +474,11 @@ mod tests {
     }
 
     #[test]
+    fn parses_track_number() {
+        Song::check("04. Band - Song", album!("04", "Band", "Song"));
+    }
+
+    #[test]
     fn parses_remix() {
         let inputs = [
             ("Band - Song [Club Remix]", "Club Remix"),
@@ -495,6 +503,8 @@ mod tests {
             "Artist - Song [M/V]",
             "Artist - Song (Official Music Video)",
             "Artist - Song (Official Video)",
+            "Artist - Song (Official HD Video)",
+            "Artist - Song (Official Audio)",
             "Artist - Song (Music Video)",
             "Artist - Song [Original Mix]",
             "Artist - Song [Full version]",

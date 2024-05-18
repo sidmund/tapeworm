@@ -99,5 +99,8 @@ mod tests {
             remove_str_from_string(input, "dolor"),
             "Lorem ipsum  sic amet."
         );
+
+        let input = String::from("03. Artist - Song");
+        assert_eq!(remove_str_from_string(input, "03."), "Artist - Song");
     }
 }
