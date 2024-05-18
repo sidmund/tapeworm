@@ -159,17 +159,17 @@ where
 {
     if old.is_none() {
         if new.is_some() {
-            println!("  {:<15} N/A\n{:<20}-> {}", name, "", new.as_ref().unwrap());
+            println!("  {:<15} N/A\n{:<16}> {}", name, "", new.as_ref().unwrap());
         } // No need to print anything when both are none
         return;
     }
 
     let old = old.as_ref().unwrap();
     if new.is_none() || new.as_ref().is_some_and(|x| *x == *old) {
-        println!("  {:<15} {}\n{:<20}(keep as is)", name, old, "");
+        println!("  {:<15} (keep) {}", name, old);
     } else {
         let new = new.as_ref().unwrap();
-        println!("  {:<15} {}\n{:<20}-> {}", name, old, "", new);
+        println!("  {:<15} {}\n{:<16}> {}", name, old, "", new);
     }
 }
 

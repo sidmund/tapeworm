@@ -84,6 +84,8 @@ fn organize<R: BufRead>(
     let mut errors = Vec::new();
 
     for entry in downloads {
+        println!();
+
         let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
         let tag = Tag::new().read_from_path(&entry);
 
@@ -156,6 +158,8 @@ fn drop<R: BufRead>(
     let mut errors = Vec::new();
 
     for entry in downloads {
+        println!();
+
         let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
 
         let target = target_dir.join(filename);
@@ -184,13 +188,9 @@ fn drop<R: BufRead>(
 /// - `Some(String)` with a file error message
 fn rename(entry: PathBuf, target: PathBuf) -> Option<String> {
     if fs::rename(entry.clone(), target.clone()).is_err() {
-        Some(format!(
-            "! {}\n    -> {}",
-            entry.display(),
-            target.display()
-        ))
+        Some(format!("! {}\n> {}", entry.display(), target.display()))
     } else {
-        println!("  {}\n    -> {}", entry.display(), target.display());
+        println!("  {}\n> {}", entry.display(), target.display());
         None
     }
 }
@@ -209,7 +209,10 @@ fn letter_for(s: &str) -> String {
 /// Returns true to overwrite, false otherwise.
 fn overwrite<R: BufRead>(target: &PathBuf, reader: R) -> bool {
     if fs::metadata(target).is_ok() {
-        let prompt = format!("! File already exists: {}\nOverwrite?", target.to_str().unwrap());
+        let prompt = format!(
+            "! File already exists: {}\nOverwrite?",
+            target.to_str().unwrap()
+        );
         let overwrite = util::confirm(&prompt, true, reader);
         if overwrite.is_err() || !overwrite.unwrap() {
             return false;
