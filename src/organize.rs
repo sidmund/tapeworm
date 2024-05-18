@@ -209,7 +209,8 @@ fn letter_for(s: &str) -> String {
 /// Returns true to overwrite, false otherwise.
 fn overwrite<R: BufRead>(target: &PathBuf, reader: R) -> bool {
     if fs::metadata(target).is_ok() {
-        let overwrite = util::confirm("The file already exists. Overwrite?", true, reader);
+        let prompt = format!("! File already exists: {}\nOverwrite?", target.to_str().unwrap());
+        let overwrite = util::confirm(&prompt, true, reader);
         if overwrite.is_err() || !overwrite.unwrap() {
             return false;
         }
