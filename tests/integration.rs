@@ -1,5 +1,6 @@
 mod common;
 
+use audiotags::Tag;
 use common::*;
 use std::fs;
 
@@ -61,9 +62,7 @@ fn adds_term_to_library() {
     let lib_path = config.lib_path.clone().unwrap();
     let input_path = config.input_path.clone().unwrap();
     run(config).unwrap();
-
     assert_eq!("ytsearch:\"Darude Sandstorm\"\n", read(input_path));
-
     destroy(lib_path);
 }
 
@@ -129,35 +128,66 @@ fn downloads_and_clears_input() {
 fn fails_tag_on_incorrect_args() {
     let lib = "tw-test-tag-fail";
     let lib_path = create_lib(lib);
-
     assert!(run(setup(vec!["tag", lib]).unwrap()).is_err());
     assert!(run(setup(vec!["tag", lib, "-i"]).unwrap()).is_err());
     assert!(run(setup(vec!["tag", lib, "-i", "tw-test-uy4hfaif"]).unwrap()).is_err());
+    destroy(lib_path);
+}
+
+#[test]
+fn tag_does_not_fail_without_files() {
+    let lib = "tw-test-tag-no-files";
+    let lib_path = create_lib(lib);
+    run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
+    destroy(lib_path);
+}
+
+#[test]
+fn tag_does_not_fail_with_unsupported_files() {
+    let lib = "tw-test-tag-unsupported";
+    let lib_path = create_lib(lib);
+
+    let res = get_resources();
+    let files = [
+        "empty_title.mp3", // TODO fix so there is a " " for title tag
+        "no_tags.mp3",
+        "no_title.mp3",
+        "not_audio.jpg",
+    ];
+    for file in files {
+        fs::copy(res.join(file), lib_path.join(file)).unwrap();
+    }
+
+    run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
 
     destroy(lib_path);
 }
 
 #[test]
-fn tags() {
+fn tags_file_with_title_tag() {
     let lib = "tw-test-tag";
     let lib_path = create_lib(lib);
 
-    // Does not fail if no files are present
-    run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
+    let res = get_resources();
+    fs::copy(res.join("title.mp3"), lib_path.join("title.mp3")).unwrap();
 
-    // Copy an untagged resource file to the lib dir
-    let res_path = get_resources();
-    let mp3_path = res_path.join("song.mp3");
-    fs::copy(mp3_path, lib_path.join("song.mp3")).unwrap();
-    // Test that run succeeds, and the file is simply skipped when no tag present
-    run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
+    assert!(fs::metadata(lib_path.join("Artist - Song [Radio Edit].mp3")).is_err());
+    let tag = Tag::new()
+        .read_from_path(lib_path.join("title.mp3"))
+        .unwrap();
+    assert_eq!(tag.title().unwrap(), "Artist - Song (Radio Edit)");
+    assert_eq!(tag.artist(), None);
 
     // TODO how to pass input so we dont have to interact with the test?
     // I think i'll just make a cli/lib.conf option for it
+    run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
 
-    // TODO verify that mp3 has at least the title tag
-    // TODO test tag::tag (whatever is not covered by unit tests)
-    // TODO verify that the tags were updated
+    assert!(fs::metadata(lib_path.join("title.mp3")).is_err());
+    let tag = Tag::new()
+        .read_from_path(lib_path.join("Artist - Song [Radio Edit].mp3"))
+        .unwrap();
+    assert_eq!(tag.title().unwrap(), "Song [Radio Edit]");
+    assert_eq!(tag.artist().unwrap(), "Artist");
 
     destroy(lib_path);
 }
