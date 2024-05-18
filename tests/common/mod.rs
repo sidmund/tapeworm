@@ -2,7 +2,7 @@
 
 use std::env;
 use std::fs;
-use std::io::Write;
+use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use tapeworm::Config;
 
@@ -12,8 +12,13 @@ pub fn setup(mut args: Vec<&str>) -> Result<Config, Box<dyn std::error::Error>> 
     Config::build(args)
 }
 
+/// Run the `config` and use `io::stdin` for reading any user input.
 pub fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
-    tapeworm::run(config)
+    tapeworm::run(config, io::stdin().lock())
+}
+
+pub fn run_with<R: BufRead>(config: Config, reader: R) -> Result<(), Box<dyn std::error::Error>> {
+    tapeworm::run(config, reader)
 }
 
 pub fn get_resources() -> PathBuf {

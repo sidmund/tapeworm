@@ -7,6 +7,7 @@ use audiotags::Tag;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::BufRead;
 use std::path::PathBuf;
 
 /// For each downloaded file, use its "title" metadata tag to extract more tags. If this tag is not
@@ -14,7 +15,7 @@ use std::path::PathBuf;
 ///
 /// Titles generally contain extra information, e.g. "Artist ft. Band - Song (2024) [Remix]"
 /// Information such as collaborating artists, year, remix, etc. are extracted.
-pub fn tag(config: &Config) -> types::UnitResult {
+pub fn tag<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
     if config.input_dir.is_none() {
         return Err("'INPUT_DIR' must be set. See 'help'".into());
     }
@@ -114,7 +115,7 @@ pub fn tag(config: &Config) -> types::UnitResult {
         print_proposal("GENRE", &ftag.genre(), &genre);
         print_proposal("FILENAME", &Some(&filename), &Some(&new_filename));
 
-        if util::confirm("Accept these changes?", true)? {
+        if util::confirm("Accept these changes?", true, &mut reader)? {
             // Write tags
             if let Some(artist) = artist.clone() {
                 ftag.set_artist(&artist);

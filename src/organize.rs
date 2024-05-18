@@ -5,6 +5,7 @@ use crate::util;
 use crate::Config;
 use audiotags::Tag;
 use std::fs;
+use std::io::BufRead;
 use std::path::PathBuf;
 
 /// Attempt to move all downloaded (and processed) files in INPUT_DIR to TARGET_DIR.
@@ -14,7 +15,7 @@ use std::path::PathBuf;
 ///
 /// If ORGANIZE is specified, files will be moved to organized subdirectories of TARGET_DIR,
 /// according to the organization mode.
-pub fn deposit(config: &Config) -> types::UnitResult {
+pub fn deposit<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
     if config.target_dir.is_none() {
         return Err("'TARGET_DIR' must be set for moving downloads. See 'help'".into());
     } else if config.input_dir.is_none() {
@@ -47,7 +48,7 @@ pub fn deposit(config: &Config) -> types::UnitResult {
         PathBuf::from(config.lib_path.clone().unwrap()).join(config.target_dir.clone().unwrap());
     let target_dir = util::guarantee_dir_path(target_dir)?;
 
-    if let Some(errors) = func(target_dir, downloads) {
+    if let Some(errors) = func(target_dir, downloads, reader) {
         return Err(format!(
             "Could not move {} files to target directory:{}",
             errors.len(),
@@ -73,7 +74,11 @@ pub fn deposit(config: &Config) -> types::UnitResult {
 /// - `Band - Song.mp3 with artist tag 'Band'` -> `target_dir/B/Band/Band - Song.mp3`
 /// - `Band - Song.mp3 without artist tag`     -> `target_dir/B/Band/Band - Song.mp3`
 /// - `Band - Song.mp3 with artist, album tag` -> `target_dir/B/Band/Album/Band - Song.mp3`
-fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecString {
+fn organize<R: BufRead>(
+    target_dir: PathBuf,
+    downloads: Vec<PathBuf>,
+    mut reader: R,
+) -> types::OptionVecString {
     println!("Sorting files into {}...", target_dir.display());
 
     let mut errors = Vec::new();
@@ -123,7 +128,7 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecStr
         }
         let target = target.unwrap().join(filename);
 
-        if !overwrite(&target) {
+        if !overwrite(&target, &mut reader) {
             println!("  Skipping {}", entry.display());
             continue;
         }
@@ -141,7 +146,11 @@ fn organize(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecStr
 }
 
 /// Simply drop the `downloads` files directly in `target_dir`.
-fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecString {
+fn drop<R: BufRead>(
+    target_dir: PathBuf,
+    downloads: Vec<PathBuf>,
+    mut reader: R,
+) -> types::OptionVecString {
     println!("Dropping files into {}...", target_dir.display());
 
     let mut errors = Vec::new();
@@ -151,7 +160,7 @@ fn drop(target_dir: PathBuf, downloads: Vec<PathBuf>) -> types::OptionVecString 
 
         let target = target_dir.join(filename);
 
-        if !overwrite(&target) {
+        if !overwrite(&target, &mut reader) {
             println!("  Skipping {}", entry.display());
             continue;
         }
@@ -198,9 +207,9 @@ fn letter_for(s: &str) -> String {
 /// Checks if a file already exists at the `target` location,
 /// and asks the user whether to overwrite it.
 /// Returns true to overwrite, false otherwise.
-fn overwrite(target: &PathBuf) -> bool {
+fn overwrite<R: BufRead>(target: &PathBuf, reader: R) -> bool {
     if fs::metadata(target).is_ok() {
-        let overwrite = util::confirm("The file already exists. Overwrite?", true);
+        let overwrite = util::confirm("The file already exists. Overwrite?", true, reader);
         if overwrite.is_err() || !overwrite.unwrap() {
             return false;
         }

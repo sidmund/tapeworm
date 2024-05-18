@@ -8,6 +8,7 @@ mod types;
 mod util;
 
 use std::fs;
+use std::io::BufRead;
 use std::path::PathBuf;
 use std::process;
 use url::Url;
@@ -75,11 +76,7 @@ impl Config {
             .join(library.clone());
 
         if self.command != "add" && fs::metadata(&lib_path).is_err() {
-            return Err(format!(
-                "Library not found: {}",
-                lib_path.to_str().unwrap()
-            )
-            .into());
+            return Err(format!("Library not found: {}", lib_path.to_str().unwrap()).into());
         }
 
         let mut lib_conf_path = lib_path.join("lib");
@@ -277,15 +274,15 @@ impl Config {
     }
 }
 
-pub fn run(config: Config) -> types::UnitResult {
+pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
     for command in &config.steps()? {
         match command.as_str() {
             "list" => info::list()?,
             "show" => info::show(&config)?,
             "add" => add::add(&config)?,
-            "download" => download::download(&config)?,
-            "tag" => tag::tag(&config)?,
-            "deposit" => organize::deposit(&config)?,
+            "download" => download::download(&config, &mut reader)?,
+            "tag" => tag::tag(&config, &mut reader)?,
+            "deposit" => organize::deposit(&config, &mut reader)?,
             _ => return Err("Unrecognized command. See 'help'".into()),
         }
     }

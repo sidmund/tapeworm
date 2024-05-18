@@ -178,9 +178,9 @@ fn tags_file_with_title_tag() {
     assert_eq!(tag.title().unwrap(), "Artist - Song (Radio Edit)");
     assert_eq!(tag.artist(), None);
 
-    // TODO how to pass input so we dont have to interact with the test?
-    // I think i'll just make a cli/lib.conf option for it
-    run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
+    let reader = std::io::stdin().lock(); // TODO figure out
+    let config = setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap();
+    run_with(config, reader).unwrap();
 
     assert!(fs::metadata(lib_path.join("title.mp3")).is_err());
     let tag = Tag::new()
@@ -188,6 +188,8 @@ fn tags_file_with_title_tag() {
         .unwrap();
     assert_eq!(tag.title().unwrap(), "Song [Radio Edit]");
     assert_eq!(tag.artist().unwrap(), "Artist");
+
+    // TODO also test that 'n' preserves the file and tags
 
     destroy(lib_path);
 }
