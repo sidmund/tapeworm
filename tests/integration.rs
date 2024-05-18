@@ -2,7 +2,7 @@ mod common;
 
 use audiotags::Tag;
 use common::*;
-use std::{fs, io::BufReader};
+use std::{fs, io::BufReader, path::PathBuf};
 
 #[test]
 fn shows_list() {
@@ -147,7 +147,6 @@ fn tag_does_not_fail_with_unsupported_files() {
     let lib = "tw-test-tag-unsupported";
     let lib_path = create_lib(lib);
 
-    let res = get_resources();
     let files = [
         "empty_title.mp3", // TODO fix so there is a " " for title tag
         "no_tags.mp3",
@@ -155,7 +154,7 @@ fn tag_does_not_fail_with_unsupported_files() {
         "not_audio.jpg",
     ];
     for file in files {
-        fs::copy(res.join(file), lib_path.join(file)).unwrap();
+        copy(file, &lib_path);
     }
 
     run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
@@ -168,8 +167,7 @@ fn tags_file_with_title_tag() {
     let lib = "tw-test-tag-yes";
     let lib_path = create_lib(lib);
 
-    let res = get_resources();
-    fs::copy(res.join("title.mp3"), lib_path.join("title.mp3")).unwrap();
+    copy("title.mp3", &lib_path);
 
     assert!(fs::metadata(lib_path.join("Artist - Song [Radio Edit].mp3")).is_err());
     let tag = Tag::new()
@@ -198,8 +196,7 @@ fn cancel_tagging_preserves_file() {
     let lib = "tw-test-tag-no";
     let lib_path = create_lib(lib);
 
-    let res = get_resources();
-    fs::copy(res.join("title.mp3"), lib_path.join("title.mp3")).unwrap();
+    copy("title.mp3", &lib_path);
 
     assert!(fs::metadata(lib_path.join("Artist - Song [Radio Edit].mp3")).is_err());
     let tag = Tag::new()
@@ -285,8 +282,55 @@ fn fails_deposit_on_incorrect_args() {
     destroy(lib_path);
 }
 
+fn deposit(lib: &str, drop: bool, filename: &str, organize_path: &PathBuf) {
+    let (lib_path, lib_in, lib_out) = create_lib_with_folders(lib);
+
+    copy(filename, &lib_in);
+    let original_path = lib_in.join(filename);
+    let drop_path = lib_out.join(filename);
+    let organize_path = lib_out.join(organize_path).join(filename);
+
+    assert!(fs::metadata(&original_path).is_ok());
+    assert!(fs::metadata(&drop_path).is_err());
+    assert!(fs::metadata(&organize_path).is_err());
+
+    let i = lib_in.to_str().unwrap();
+    let o = lib_out.to_str().unwrap();
+    let opts = if drop {
+        vec!["deposit", lib, "-i", i, "-o", o]
+    } else {
+        vec!["deposit", lib, "-i", i, "-o", o, "-d", "A-Z"]
+    };
+    run(setup(opts).unwrap()).unwrap();
+
+    assert!(fs::metadata(original_path).is_err());
+    if drop {
+        assert!(fs::metadata(drop_path).is_ok());
+        assert!(fs::metadata(organize_path).is_err());
+    } else {
+        assert!(fs::metadata(drop_path).is_err());
+        assert!(fs::metadata(organize_path).is_ok());
+    }
+
+    destroy(lib_path);
+}
+
 #[test]
-fn deposits() {}
+fn deposits() {
+    let files = [
+        ("no_tags.mp3", PathBuf::from("N")),
+        ("tagged.mp3", PathBuf::from("A").join("Artist")),
+        (
+            "tagged_album.mp3",
+            PathBuf::from("A").join("Artist").join("Album"),
+        ),
+    ];
+    for (filename, organize_path) in files {
+        for drop in [true, false] {
+            deposit("tw-test-deposit", drop, filename, &organize_path);
+        }
+    }
+}
 
 #[test]
 fn fails_to_process_without_steps() {
