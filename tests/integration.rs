@@ -2,7 +2,7 @@ mod common;
 
 use audiotags::Tag;
 use common::*;
-use std::fs;
+use std::{fs, io::BufReader};
 
 #[test]
 fn shows_list() {
@@ -165,7 +165,7 @@ fn tag_does_not_fail_with_unsupported_files() {
 
 #[test]
 fn tags_file_with_title_tag() {
-    let lib = "tw-test-tag";
+    let lib = "tw-test-tag-yes";
     let lib_path = create_lib(lib);
 
     let res = get_resources();
@@ -178,7 +178,8 @@ fn tags_file_with_title_tag() {
     assert_eq!(tag.title().unwrap(), "Artist - Song (Radio Edit)");
     assert_eq!(tag.artist(), None);
 
-    let reader = std::io::stdin().lock(); // TODO figure out
+    let buffer = Vec::from(b"y\n");
+    let reader: BufReader<&[u8]> = BufReader::new(buffer.as_ref());
     let config = setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap();
     run_with(config, reader).unwrap();
 
@@ -189,7 +190,35 @@ fn tags_file_with_title_tag() {
     assert_eq!(tag.title().unwrap(), "Song [Radio Edit]");
     assert_eq!(tag.artist().unwrap(), "Artist");
 
-    // TODO also test that 'n' preserves the file and tags
+    destroy(lib_path);
+}
+
+#[test]
+fn cancel_tagging_preserves_file() {
+    let lib = "tw-test-tag-no";
+    let lib_path = create_lib(lib);
+
+    let res = get_resources();
+    fs::copy(res.join("title.mp3"), lib_path.join("title.mp3")).unwrap();
+
+    assert!(fs::metadata(lib_path.join("Artist - Song [Radio Edit].mp3")).is_err());
+    let tag = Tag::new()
+        .read_from_path(lib_path.join("title.mp3"))
+        .unwrap();
+    assert_eq!(tag.title().unwrap(), "Artist - Song (Radio Edit)");
+    assert_eq!(tag.artist(), None);
+
+    let buffer = Vec::from(b"n\n");
+    let reader: BufReader<&[u8]> = BufReader::new(buffer.as_ref());
+    let config = setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap();
+    run_with(config, reader).unwrap();
+
+    assert!(fs::metadata(lib_path.join("Artist - Song [Radio Edit].mp3")).is_err());
+    let tag = Tag::new()
+        .read_from_path(lib_path.join("title.mp3"))
+        .unwrap();
+    assert_eq!(tag.title().unwrap(), "Artist - Song (Radio Edit)");
+    assert_eq!(tag.artist(), None);
 
     destroy(lib_path);
 }
@@ -266,4 +295,3 @@ fn fails_to_process_without_steps() {
     assert!(run(setup(vec!["process", lib]).unwrap()).is_err());
     destroy(lib_path);
 }
-
