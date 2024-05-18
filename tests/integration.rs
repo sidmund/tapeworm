@@ -1,23 +1,17 @@
 mod common;
 
-use common::{run, setup};
-use dirs;
+use common::*;
 use std::fs;
-use std::io::Write;
-use std::path::PathBuf;
 
 #[test]
 fn shows_list() {
-    let config = setup(vec!["list"]).unwrap();
-    run(config).unwrap();
+    run(setup(vec!["list"]).unwrap()).unwrap();
 }
 
 #[test]
 fn fails_without_library() {
-    let commands = ["show", "add", "download", "tag", "deposit", "process"];
-    for command in commands {
-        let config = setup(vec![command]);
-        assert!(config.is_err());
+    for cmd in ["show", "add", "download", "tag", "deposit", "process"] {
+        assert!(setup(vec![cmd]).is_err());
     }
 }
 
@@ -32,21 +26,15 @@ fn fails_with_non_existing_library() {
 
 #[test]
 fn add_fails_without_args() {
-    let config = setup(vec!["add", "tw-test-aisy822rit"]);
-    assert!(config.is_err());
+    assert!(setup(vec!["add", "tw-test-aisy822rit"]).is_err());
 }
 
 #[test]
 fn shows_library() {
-    let test_lib = PathBuf::from(dirs::config_dir().unwrap())
-        .join("tapeworm")
-        .join("tw-test-show");
-    fs::create_dir_all(&test_lib).unwrap();
-
-    let config = setup(vec!["show", "tw-test-show"]).unwrap();
-    run(config).unwrap();
-
-    fs::remove_dir_all(&test_lib).unwrap(); // cleanup
+    let lib = "tw-test-show";
+    let lib_path = create_lib(lib);
+    run(setup(vec!["show", lib]).unwrap()).unwrap();
+    destroy(lib_path);
 }
 
 #[test]
@@ -64,7 +52,7 @@ fn adds_url_to_library() {
     let contents = fs::read_to_string(input_path).unwrap();
     assert_eq!("https://www.youtube.com/watch?v=dQw4w9WgXcQ\n", contents);
 
-    fs::remove_dir_all(&lib_path).unwrap(); // cleanup
+    destroy(lib_path);
 }
 
 #[test]
@@ -74,33 +62,23 @@ fn adds_term_to_library() {
     let input_path = config.input_path.clone().unwrap();
     run(config).unwrap();
 
-    let contents = fs::read_to_string(input_path).unwrap();
-    assert_eq!("ytsearch:\"Darude Sandstorm\"\n", contents);
+    assert_eq!("ytsearch:\"Darude Sandstorm\"\n", read(input_path));
 
-    fs::remove_dir_all(&lib_path).unwrap(); // cleanup
+    destroy(lib_path);
 }
 
 fn download(lib: &str, clear_input: bool) {
-    // Write some yt-dlp options
-    let lib_path = PathBuf::from(dirs::config_dir().unwrap())
-        .join("tapeworm")
-        .join(lib);
-    fs::create_dir_all(&lib_path).unwrap();
+    let lib_path = create_lib(lib);
 
-    let mut conf = fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(&lib_path.join("yt-dlp.conf"))
-        .unwrap();
-    let contents = format!(
+    // Write some yt-dlp options
+    let options = format!(
         "-i -P \"{}\" -o \"%(title)s.%(ext)s\" -x --audio-format mp3",
         lib_path.to_str().unwrap()
     );
-    conf.write_all(contents.as_bytes()).unwrap();
+    write(lib_path.join("yt-dlp.conf"), options);
 
     // Add a query
-    let config = setup(vec!["add", lib, "Darude", "Sandstorm"]).unwrap();
-    run(config).unwrap();
+    run(setup(vec!["add", lib, "Darude", "Sandstorm"]).unwrap()).unwrap();
 
     // Wait for download
     let config = if clear_input {
@@ -127,14 +105,12 @@ fn download(lib: &str, clear_input: bool) {
     assert_eq!(3, count);
 
     if clear_input {
-        let contents = fs::read_to_string(input_path).unwrap();
-        assert!(contents.is_empty());
+        assert!(read(input_path).is_empty());
     } else {
-        let contents = fs::read_to_string(input_path).unwrap();
-        assert_eq!("ytsearch:\"Darude Sandstorm\"\n", contents);
+        assert_eq!("ytsearch:\"Darude Sandstorm\"\n", read(input_path));
     }
 
-    fs::remove_dir_all(&lib_path).unwrap(); // cleanup
+    destroy(lib_path);
 }
 
 #[test]
@@ -152,32 +128,25 @@ fn downloads_and_clears_input() {
 #[test]
 fn fails_tag_on_incorrect_args() {
     let lib = "tw-test-tag-fail";
-    let lib_path = PathBuf::from(dirs::config_dir().unwrap())
-        .join("tapeworm")
-        .join(lib);
-    fs::create_dir_all(&lib_path).unwrap();
+    let lib_path = create_lib(lib);
 
     assert!(run(setup(vec!["tag", lib]).unwrap()).is_err());
     assert!(run(setup(vec!["tag", lib, "-i"]).unwrap()).is_err());
     assert!(run(setup(vec!["tag", lib, "-i", "tw-test-uy4hfaif"]).unwrap()).is_err());
 
-    fs::remove_dir_all(&lib_path).unwrap(); // cleanup
+    destroy(lib_path);
 }
 
 #[test]
 fn tags() {
-    // Create the library dir
     let lib = "tw-test-tag";
-    let lib_path = PathBuf::from(dirs::config_dir().unwrap())
-        .join("tapeworm")
-        .join(lib);
-    fs::create_dir_all(&lib_path).unwrap();
+    let lib_path = create_lib(lib);
 
     // Does not fail if no files are present
     run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
 
     // Copy an untagged resource file to the lib dir
-    let res_path = common::get_resources();
+    let res_path = get_resources();
     let mp3_path = res_path.join("song.mp3");
     fs::copy(mp3_path, lib_path.join("song.mp3")).unwrap();
     // Test that run succeeds, and the file is simply skipped when no tag present
@@ -190,16 +159,13 @@ fn tags() {
     // TODO test tag::tag (whatever is not covered by unit tests)
     // TODO verify that the tags were updated
 
-    fs::remove_dir_all(&lib_path).unwrap(); // cleanup
+    destroy(lib_path);
 }
 
 #[test]
 fn fails_deposit_on_incorrect_args() {
     let lib = "tw-test-deposit-fail";
-    let lib_path = PathBuf::from(dirs::config_dir().unwrap())
-        .join("tapeworm")
-        .join(lib);
-    fs::create_dir_all(&lib_path).unwrap();
+    let lib_path = create_lib(lib);
     let lib_str = lib_path.to_str().unwrap();
 
     // Values are: Omit the option, No value for option, Invalid value, Valid value
@@ -255,7 +221,7 @@ fn fails_deposit_on_incorrect_args() {
         }
     }
 
-    fs::remove_dir_all(&lib_path).unwrap(); // cleanup
+    destroy(lib_path);
 }
 
 #[test]
@@ -263,13 +229,9 @@ fn deposits() {}
 
 #[test]
 fn fails_to_process_without_steps() {
-    let test_lib = PathBuf::from(dirs::config_dir().unwrap())
-        .join("tapeworm")
-        .join("tw-test-no-steps");
-    fs::create_dir_all(&test_lib).unwrap();
-
-    let config = setup(vec!["process", "tw-test-no-steps"]).unwrap();
-    assert!(run(config).is_err());
-
-    fs::remove_dir_all(&test_lib).unwrap(); // cleanup
+    let lib = "tw-test-no-steps";
+    let lib_path = create_lib(lib);
+    assert!(run(setup(vec!["process", lib]).unwrap()).is_err());
+    destroy(lib_path);
 }
+

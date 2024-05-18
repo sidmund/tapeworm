@@ -1,6 +1,8 @@
 //! Integration testing helper functions.
 
 use std::env;
+use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use tapeworm::Config;
 
@@ -18,4 +20,32 @@ pub fn get_resources() -> PathBuf {
     PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
         .join("resources")
         .join("test")
+}
+
+pub fn create_lib(name: &str) -> PathBuf {
+    let lib = PathBuf::from(dirs::config_dir().unwrap())
+        .join("tapeworm")
+        .join(name);
+    fs::create_dir_all(&lib).unwrap();
+    lib
+}
+
+/// Remove the library folder and all its contents.
+pub fn destroy(lib: PathBuf) {
+    fs::remove_dir_all(lib).unwrap();
+}
+
+pub fn read(path: PathBuf) -> String {
+    fs::read_to_string(path).unwrap()
+}
+
+/// Write the `contents` to the file at `path`. If the file does not exist,
+/// it is created; otherwise, it will be overwritten.
+pub fn write(path: PathBuf, contents: String) {
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .open(path)
+        .unwrap();
+    file.write_all(contents.as_bytes()).unwrap();
 }
