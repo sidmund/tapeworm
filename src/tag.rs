@@ -218,7 +218,7 @@ fn from_format<'a, 'b>(
 
     for caps in Regex::new(format).unwrap().captures_iter(full_title) {
         if verbose {
-            println!("Captures: {:?}", caps);
+            println!("\nUsing Regex: {}\n{:#?}", format, caps);
         }
 
         for name in ["genre", "artist", "title", "extra"] {
@@ -232,7 +232,7 @@ fn from_format<'a, 'b>(
         None
     } else {
         if verbose {
-            println!("Got tags: {:?}", tags);
+            println!("Got tags:\n{:#?}", tags);
         }
         Some(tags)
     }
@@ -297,7 +297,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
 
     let re = Regex::new(
         r"(?xi)
-        (?<feat>\((\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\)]*\)|(\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\)]*) |
+        (?<feat>\((\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\)]*\)|(\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\(\)]*) |
         (?<year>\(\d{4}\)|\d{4}) |
         (?<remix>[\[({<][^\[\](){}<>]*(cut|edit|extended(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
         (?<album>【[^【】]*(?<album_rmv>F.C)[^【】]*】) |
@@ -307,7 +307,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
 
     for caps in re.unwrap().captures_iter(&meta_title) {
         if verbose {
-            println!("Captures: {:?}", caps);
+            println!("{:#?}", caps);
         }
 
         if let Some(feat) = caps.name("feat") {
@@ -362,7 +362,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
     }
 
     if verbose {
-        println!("Got tags: {:?}", tags);
+        println!("Got tags:\n{:#?}", tags);
     }
     Some(tags)
 }
