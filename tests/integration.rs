@@ -328,3 +328,13 @@ fn fails_to_process_without_steps() {
     assert!(run(setup(vec!["process", lib]).unwrap()).is_err());
     destroy(lib_path);
 }
+
+#[test]
+fn fails_to_process_illegal_commands() {
+    let lib = "tw-test-illegal";
+    let lib_path = create_lib(lib);
+    assert!(run(setup(vec!["process", lib, "-s", "add"]).unwrap()).is_err());
+    assert!(run(setup(vec!["process", lib, "-s", "process"]).unwrap()).is_err());
+    assert!(run(setup(vec!["process", lib, "-s", "list,process"]).unwrap()).is_err());
+    destroy(lib_path);
+}
