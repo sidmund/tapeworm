@@ -137,7 +137,7 @@ fn tag_does_not_fail_with_unsupported_files() {
     let lib_path = create_lib(lib);
 
     let files = [
-        "empty_title.mp3", // TODO fix so there is a " " for title tag
+        "empty_title.mp3",
         "no_tags.mp3",
         "no_title.mp3",
         "not_audio.jpg",
