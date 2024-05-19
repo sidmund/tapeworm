@@ -53,6 +53,8 @@ pub fn deposit<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
         .into());
     }
 
+    println!();
+
     Ok(())
 }
 
