@@ -1,12 +1,8 @@
 //! Move (downloaded and/or tagged) files to a target directory.
 
-use crate::types;
-use crate::util;
-use crate::Config;
+use crate::{types, util, Config};
 use audiotags::Tag;
-use std::fs;
-use std::io::BufRead;
-use std::path::PathBuf;
+use std::{fs, io::BufRead, path::PathBuf};
 
 /// Attempt to move all downloaded (and processed) files in INPUT_DIR to TARGET_DIR.
 /// TARGET_DIR is created if not present.
@@ -37,15 +33,15 @@ pub fn deposit<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
         drop
     };
 
-    let downloads =
-        PathBuf::from(config.lib_path.clone().unwrap()).join(config.input_dir.clone().unwrap());
+    let lib_path = config.lib_path.clone().unwrap();
+
+    let downloads = lib_path.join(config.input_dir.clone().unwrap());
     let downloads: Vec<PathBuf> = util::filepaths_in(downloads)?;
     if downloads.is_empty() {
         return Ok(());
     }
 
-    let target_dir =
-        PathBuf::from(config.lib_path.clone().unwrap()).join(config.target_dir.clone().unwrap());
+    let target_dir = lib_path.join(config.target_dir.clone().unwrap());
     let target_dir = util::guarantee_dir_path(target_dir)?;
 
     if let Some(errors) = func(target_dir, downloads, reader) {
@@ -219,4 +215,26 @@ fn overwrite<R: BufRead>(target: &PathBuf, reader: R) -> bool {
         }
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn uppercases_letter() {
+        for letter in "abcdefghijklmnopqrstuvwxyz".chars() {
+            assert_eq!(
+                letter_for(&letter.to_string()),
+                letter.to_ascii_uppercase().to_string()
+            );
+        }
+    }
+
+    #[test]
+    fn handles_non_letters() {
+        for symbol in ["42", "2U", ".band.", "アーティスト", "歌手"] {
+            assert_eq!(letter_for(symbol), String::from("0-9#"));
+        }
+    }
 }
