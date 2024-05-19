@@ -1,10 +1,9 @@
 use crate::types;
-use crate::Config;
 use std::collections::HashSet;
 
 /// Scrape a Spotify playlist for a list of songs.
 /// Returns the list of songs, where each song is formatted like "TITLE ARTIST"
-pub fn spotify_playlist(_config: &Config, playlist_url: &str) -> types::HashSetResult {
+pub fn spotify_playlist(playlist_url: &str) -> types::HashSetResult {
     let browser = headless_chrome::Browser::default()?;
     let tab = browser.new_tab()?;
     tab.navigate_to(playlist_url)?;

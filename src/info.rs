@@ -60,18 +60,15 @@ COMMANDS
     show LIBRARY
         Show information about the LIBRARY
 
-    add LIBRARY URL [URL...]
-        Add URLs to the library. If the URL points to a Spotify playlist,
-        it will be scraped, and the found songs are added as YouTube search queries.
+    add LIBRARY TERM|URL [TERM|URL...]
+        Add TERMs and/or URLs to the LIBRARY. TERMs are added as YouTube search queries.
+        A URL is simply added, unless it points to a Spotify playlist.
+        In this case, it will be scraped, and the found songs are added as YouTube search queries.
         This is because of Spotify DRM restrictions.
 
-        If LIBRARY does not exist, it will be created.
+        Note that YouTube search queries can be downloaded by yt-dlp.
 
-    add LIBRARY TERM [TERM...]
-        Combine all terms into a single search query and add it to the library.
-        NB: when invoking 'download', a YouTube video will be found for the query.
-
-        If LIBRARY does not exist, it will be created.
+        NB: if LIBRARY does not exist, it will be created.
 
     download LIBRARY [OPTIONS]
         Given the inputs in ~/.config/tapeworm/LIBRARY/input.txt,
@@ -116,19 +113,18 @@ GENERAL OPTIONS
     -v      Verbosely show what is being processed
 
 EXAMPLE
-    # Create the library by recording the first query
-    tapeworm add LIBRARY the artist - a song  # records 'ytsearch:\"the artist - a song\"'
-
-    # Add a URL
+    # Create the library by recording a query
+    tapeworm add LIBRARY song  # records 'ytsearch:song'
+    tapeworm add LIBRARY \"the artist - a song\"  # records 'ytsearch:the artist - a song'
     tapeworm add LIBRARY https://youtube.com/watch?v=123
 
     # Download, tag, and organize all
     tapeworm download LIBRARY
     tapeworm tag LIBRARY
-    tapeworm deposit LIBRARY -d
+    tapeworm deposit LIBRARY -d A-Z
 
     # Alternatively, using process steps
-    tapeworm process LIBRARY -s download,tag,deposit -d
+    tapeworm process LIBRARY -s download,tag,deposit -d A-Z
 "
     );
 }

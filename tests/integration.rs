@@ -18,11 +18,10 @@ fn fails_without_library() {
 
 #[test]
 fn fails_with_non_existing_library() {
-    assert!(setup(vec!["show", "tw-test-gaf9843uj3nrj"]).is_err());
-    assert!(setup(vec!["download", "tw-test-i1g491osf"]).is_err());
-    assert!(setup(vec!["tag", "tw-test-a98w46yfha0huf"]).is_err());
-    assert!(setup(vec!["deposit", "tw-test-9732tryafo"]).is_err());
-    assert!(setup(vec!["process", "tw-test-aiyeq29a48"]).is_err());
+    for cmd in ["show", "download", "tag", "deposit", "process"] {
+        let lib = format!("tw-test-{}-unexist", cmd);
+        assert!(setup(vec![cmd, &lib]).is_err());
+    }
 }
 
 #[test]
@@ -39,30 +38,20 @@ fn shows_library() {
 }
 
 #[test]
-fn adds_url_to_library() {
-    let config = setup(vec![
-        "add",
-        "tw-test-url",
-        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-    ])
-    .unwrap();
+fn adds_to_library() {
+    let lib = "tw-test-add";
+    let url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+    let config = setup(vec!["add", lib, url]).unwrap();
     let lib_path = config.lib_path.clone().unwrap();
     let input_path = config.input_path.clone().unwrap();
     run(config).unwrap();
+    run(setup(vec!["add", lib, "Darude Sandstorm"]).unwrap()).unwrap();
 
-    let contents = fs::read_to_string(input_path).unwrap();
-    assert_eq!("https://www.youtube.com/watch?v=dQw4w9WgXcQ\n", contents);
+    assert_eq!(
+        format!("{}\nytsearch:Darude Sandstorm\n", url),
+        read(input_path)
+    );
 
-    destroy(lib_path);
-}
-
-#[test]
-fn adds_term_to_library() {
-    let config = setup(vec!["add", "tw-test-term", "Darude", "Sandstorm"]).unwrap();
-    let lib_path = config.lib_path.clone().unwrap();
-    let input_path = config.input_path.clone().unwrap();
-    run(config).unwrap();
-    assert_eq!("ytsearch:\"Darude Sandstorm\"\n", read(input_path));
     destroy(lib_path);
 }
 
@@ -77,7 +66,7 @@ fn download(lib: &str, clear_input: bool) {
     write(lib_path.join("yt-dlp.conf"), options);
 
     // Add a query
-    run(setup(vec!["add", lib, "Darude", "Sandstorm"]).unwrap()).unwrap();
+    run(setup(vec!["add", lib, "Darude Sandstorm"]).unwrap()).unwrap();
 
     // Wait for download
     let config = if clear_input {
@@ -106,7 +95,7 @@ fn download(lib: &str, clear_input: bool) {
     if clear_input {
         assert!(read(input_path).is_empty());
     } else {
-        assert_eq!("ytsearch:\"Darude Sandstorm\"\n", read(input_path));
+        assert_eq!("ytsearch:Darude Sandstorm\n", read(input_path));
     }
 
     destroy(lib_path);

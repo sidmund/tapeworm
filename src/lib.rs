@@ -11,7 +11,6 @@ use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::process;
-use url::Url;
 
 #[derive(Debug, Default)]
 pub struct Config {
@@ -98,36 +97,17 @@ impl Config {
     }
 
     fn parse_terms(&mut self, mut args: impl Iterator<Item = String>) -> types::UnitResult {
-        let first = args.next();
-        if first.is_none() {
-            return Err("Provide either search term(s), or URL(s). See 'help'".into());
+        let mut terms = Vec::new();
+        while let Some(arg) = args.next() {
+            terms.push(arg);
         }
 
-        let mut terms: Vec<String> = Vec::new();
-
-        let first = first.unwrap();
-
-        if Url::parse(&first).is_ok() {
-            terms.push(first);
-            // If the first term parses as a URL, enforce that the rest are URLs too
-            while let Some(arg) = args.next() {
-                if Url::parse(&arg).is_err() {
-                    return Err(format!("{} is not a URL. See 'help'", arg).into());
-                }
-                terms.push(arg);
-            }
-            self.terms = Some(terms);
+        if terms.is_empty() {
+            Err("Provide search term(s) and/or URL(s). See 'help'".into())
         } else {
-            terms.push(first);
-            while let Some(arg) = args.next() {
-                terms.push(arg);
-            }
-            // Otherwise, add all terms as a single query
-            let query = format!("ytsearch:\"{}\"", terms.join(" "));
-            self.terms = Some(vec![query]);
+            self.terms = Some(terms);
+            Ok(())
         }
-
-        Ok(())
     }
 
     /// Attempt to read in options from lib.conf if it exists.

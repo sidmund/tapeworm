@@ -12,7 +12,7 @@ tapeworm uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) for downloading and can
 
 ## Is this for you?
 
-If you just need to download URL(s), use yt-dlp. yt-dlp has options for specifying an input file and configuration files. yt-dlp also works with queries like `yt-dlp ytsearch:"query"`. If that is not enough and you need some of the following features, tapeworm is for you:
+If you just need to download URL(s), use yt-dlp. yt-dlp has options for specifying an input file and configuration files. yt-dlp also works with queries like `yt-dlp ytsearch:query`. If that is not enough and you need some of the following features, tapeworm is for you:
 
 - You want to obtain URLs/queries from sites not supported by yt-dlp, e.g. yt-dlp cannot download from Spotify; but tapeworm can scrape Spotify for song information and will download the songs using `ytsearch` queries
 - You want a single application to store URLs, to download them, to tag them, and to organize them
@@ -38,8 +38,9 @@ tapeworm works with "libraries". A library specifies a.o. what files to download
 Minimal example setup and usage when you want to use tapeworm for downloading:
 
 ```sh
-# Create the library by recording the first query
-tapeworm add LIBRARY the artist - a song # records 'ytsearch:"the artist - a song"'
+# Create the library by recording a query
+tapeworm add LIBRARY song  # records 'ytsearch:song'
+tapeworm add LIBRARY "the artist - a song"  # records 'ytsearch:the artist - a song'
 tapeworm add LIBRARY https://youtube.com/watch?v=123 # records the URL
 
 # Download all URLs/queries
@@ -122,12 +123,14 @@ This file is created the first time `tapeworm add LIBRARY URL|TERM...` is issued
 
 Example:
 ```sh
-tapeworm add LIBRARY the artist - a song  # add a query
+tapeworm add LIBRARY song  # add a query
+tapeworm add LIBRARY "the artist - a song"  # add a query
 tapeworm add LIBRARY https://youtube.com/watch?v=123  # add a URL
 ```
 The file now contains:
 ```
-ytsearch:"the artist - a song"
+ytsearch:song
+ytsearch:the artist - a song
 https://youtube.com/watch?v=123
 ```
 
@@ -157,7 +160,7 @@ echo "-x <etc>" > yt-dlp.conf # add audio extraction and format options
 
 # Add to song/input.txt
 tapeworm add song https://youtube.com/watch?v=123
-tapeworm add song the artist - a song
+tapeworm add song "the artist - a song"
 
 # Find URLs for each input (if needed) and download all of them as audio
 tapeworm download song
@@ -172,7 +175,7 @@ echo "INPUT_DIR=tmp" >> lib.conf
 echo "TARGET_DIR=/home/<user_name>/Music" >> lib.conf
 
 tapeworm add music https://youtube.com/watch?v=123
-tapeworm add music the artist - a song
+tapeworm add music "the artist - a song"
 
 tapeworm download music
 tapeworm tag music
