@@ -1,14 +1,44 @@
 //! This module provides functionality for extracting tags from a filename.
 
-use crate::types;
-use crate::util;
-use crate::Config;
+use crate::{types, util, Config};
 use audiotags::Tag;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::io::BufRead;
-use std::path::PathBuf;
+use std::{fs, io::BufRead, path::PathBuf};
+
+struct RegexConfig {
+    author_separator: Regex,
+    title_formats: Vec<Regex>,
+    catch_all: Regex,
+}
+impl Default for RegexConfig {
+    fn default() -> Self {
+        Self {
+            author_separator: Regex::new(
+                r"(?i)(\s(x|and)\s|(^|\s)(feat(uring|\.)?|ft\.?|w[⧸/])|&|,|，)",
+            )
+            .unwrap(),
+            title_formats: vec![
+                // 「GENRE」[ARTISTS] TITLE
+                Regex::new(r"^「(?<genre>[^」]+)」\[(?<artists>[^\]]+)\]\s(?<title>.+)$").unwrap(),
+                // ARTISTS 'TITLE'EXTRA?
+                Regex::new(r"^(?<artists>[^'‘]+)\s['‘](?<title>[^'’]+)['’](?<extra>.+)?$").unwrap(),
+                // TRACK_NO.? ARTISTS - TITLE
+                Regex::new(r"^(?<track_no>\d+\.)?(?<artists>[^-_~｜]+)[-_~｜](?<title>.+)$")
+                    .unwrap(),
+            ],
+            catch_all: Regex::new(
+        r"(?xi)
+        (?<feat>\((\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\)]*\)|(\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\(\)]*) |
+        (?<year>\(\d{4}\)|\d{4}) |
+        (?<remix>[\[({<][^\[\](){}<>]*(cut|edit|extended(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
+        (?<album>【[^【】]*(?<album_rmv>F.C)[^【】]*】) |
+        (?<strip>[\[({<][^\[\](){}<>]*(full\sversion|(official\s)?((music\s)?video|audio)|m/?v|hq|hd)[^\[\](){}<>]*[\])}>])
+        ",
+            ).unwrap(),
+        }
+    }
+}
 
 /// For each downloaded file, use its "title" metadata tag to extract more tags. If this tag is not
 /// present in the file, it will not be affected.
@@ -24,6 +54,8 @@ pub fn tag<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
         PathBuf::from(config.lib_path.clone().unwrap()).join(config.input_dir.clone().unwrap());
     let downloads: Vec<PathBuf> = util::filepaths_in(downloads)?;
     let total = downloads.len();
+
+    let regex = RegexConfig::default();
 
     for (i, entry) in downloads.iter().enumerate() {
         let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
@@ -43,7 +75,7 @@ pub fn tag<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
             continue;
         };
 
-        let tags = if let Some(tags) = build_tags(title.trim(), config.verbose) {
+        let tags = if let Some(tags) = build_tags(&regex, title.trim(), config.verbose) {
             tags
         } else {
             println!("! No extra tags extracted from 'title', skipping");
@@ -63,7 +95,7 @@ pub fn tag<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
         // Obtain all artists
         let mut multiple = HashSet::new(); // No dupes
         if old_artist.is_some() && !config.override_artist {
-            multiple.extend(separate_authors(&old_artist.clone().unwrap()));
+            multiple.extend(separate_authors(&regex, &old_artist.clone().unwrap()));
         }
         if let Some(author) = tags.get("author") {
             multiple.extend(author.split("&").map(|s| s.to_string()));
@@ -118,7 +150,6 @@ pub fn tag<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
         print_proposal("FILENAME", &Some(&filename), &Some(&new_filename));
 
         if util::confirm("Accept these changes?", true, &mut reader)? {
-            // Write tags
             if let Some(artist) = artist.clone() {
                 ftag.set_artist(&artist);
             }
@@ -175,9 +206,12 @@ where
 
 /// Separates a string like "Band ft Artist, Musician & Singer"
 /// into a vector like ["Band", "Artist", "Musician", "Singer"].
-fn separate_authors(s: &str) -> Vec<String> {
-    let re = Regex::new(r"(?i)(\s(x|and)\s|(^|\s)(feat(uring|\.)?|ft\.?|w[⧸/])|&|,|，)");
-    re.unwrap().split(s).map(|a| a.trim().to_string()).collect()
+fn separate_authors(regex: &RegexConfig, s: &str) -> Vec<String> {
+    regex
+        .author_separator
+        .split(s)
+        .map(|a| a.trim().to_string())
+        .collect()
 }
 
 /// Attempt to extract the following tags from the title:
@@ -196,14 +230,14 @@ fn separate_authors(s: &str) -> Vec<String> {
 /// # Returns
 /// - `None`: if no tags were found (format could not capture anything)
 /// - `Some(HashMap)`: map of tag name to tag value
-fn from_format<'a, 'b>(
-    format: &'a str,
-    full_title: &'b str,
+fn from_format<'a>(
+    format: &Regex,
+    full_title: &'a str,
     verbose: bool,
-) -> Option<HashMap<&'b str, &'b str>> {
+) -> Option<HashMap<&'a str, &'a str>> {
     let mut tags = HashMap::new();
 
-    for caps in Regex::new(format).unwrap().captures_iter(full_title) {
+    for caps in format.captures_iter(full_title) {
         if verbose {
             println!("\nUsing Regex: {}\n{:#?}", format, caps);
         }
@@ -237,7 +271,11 @@ fn from_format<'a, 'b>(
 /// # Returns
 /// - `None`: when the title is empty, or no tags were found
 /// - `Some(HashMap<&str, String>)`: the map of found tags, contains at least the 'title'
-fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> {
+fn build_tags<'a>(
+    regex: &RegexConfig,
+    meta_title: &'a str,
+    verbose: bool,
+) -> Option<HashMap<&'a str, String>> {
     if meta_title.is_empty() {
         return None;
     }
@@ -254,13 +292,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
     let mut title = meta_title.to_string();
     let mut author: Vec<String> = Vec::new();
 
-    // Attempt to parse the title with any of the formats, stop as soon as one format can parse it
-    let formats = [
-        r"^「(?<genre>[^」]+)」\[(?<artists>[^\]]+)\]\s(?<title>.+)$", // 「GENRE」[ARTISTS] TITLE
-        r"^(?<artists>[^'‘]+)\s['‘](?<title>[^'’]+)['’](?<extra>.+)?$", // ARTISTS 'TITLE'EXTRA?
-        r"^(?<track_no>\d+\.)?(?<artists>[^-_~｜]+)[-_~｜](?<title>.+)$", // TRACK_NO.? ARTISTS - TITLE
-    ];
-    for fmt in formats {
+    for fmt in &regex.title_formats {
         if let Some(tt) = from_format(fmt, &meta_title, verbose) {
             if let Some(genre) = tt.get("genre") {
                 tags.insert("genre", genre.to_string());
@@ -272,7 +304,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
                 tags.insert("track_no", track_no);
             }
             if let Some(artists) = tt.get("artists") {
-                author.extend(separate_authors(artists));
+                author.extend(separate_authors(regex, artists));
             }
             let rest_title = tt.get("title");
             let extra = tt.get("extra").unwrap_or(&"");
@@ -282,21 +314,11 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
                 title = format!("{}{}", rest_title.to_string(), extra);
                 meta_title = format!("{}{}", rest_title.to_string(), extra);
             }
-            break;
+            break; // Stop as soon as one format can parse it
         }
     }
 
-    let re = Regex::new(
-        r"(?xi)
-        (?<feat>\((\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\)]*\)|(\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\(\)]*) |
-        (?<year>\(\d{4}\)|\d{4}) |
-        (?<remix>[\[({<][^\[\](){}<>]*(cut|edit|extended(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
-        (?<album>【[^【】]*(?<album_rmv>F.C)[^【】]*】) |
-        (?<strip>[\[({<][^\[\](){}<>]*(full\sversion|(official\s)?((music\s)?video|audio)|m/?v|hq|hd)[^\[\](){}<>]*[\])}>])
-        ",
-    );
-
-    for caps in re.unwrap().captures_iter(&meta_title) {
+    for caps in regex.catch_all.captures_iter(&meta_title) {
         if verbose {
             println!("{:#?}", caps);
         }
@@ -306,7 +328,7 @@ fn build_tags(meta_title: &str, verbose: bool) -> Option<HashMap<&str, String>> 
             let feat = feat.as_str();
             title = util::remove_str_from_string(title, feat);
             let feat = util::remove_brackets(feat);
-            author.extend(separate_authors(&feat).into_iter().skip(1));
+            author.extend(separate_authors(regex, &feat).into_iter().skip(1));
         }
 
         if let Some(year) = caps.name("year") {
@@ -373,8 +395,8 @@ mod tests {
         track_no: Option<String>,
     }
     impl Song {
-        fn check(input: &str, song: Song) {
-            let tags = build_tags(input, true).unwrap();
+        fn check(regex: &RegexConfig, input: &str, song: Song) {
+            let tags = build_tags(regex, input, true).unwrap();
             assert_eq!(tags.get("genre"), song.genre.as_ref());
             assert_eq!(tags.get("author"), song.author.as_ref());
             assert_eq!(tags.get("title"), song.title.as_ref());
@@ -442,14 +464,16 @@ mod tests {
 
     #[test]
     fn parses_spacing() {
-        Song::check("Band - Song", song!("Band", "Song"));
-        Song::check("Band- Song", song!("Band", "Song"));
-        Song::check("Band -Song", song!("Band", "Song"));
-        Song::check("Band-Song", song!("Band", "Song"));
+        let r = RegexConfig::default();
+        Song::check(&r, "Band - Song", song!("Band", "Song"));
+        Song::check(&r, "Band- Song", song!("Band", "Song"));
+        Song::check(&r, "Band -Song", song!("Band", "Song"));
+        Song::check(&r, "Band-Song", song!("Band", "Song"));
     }
 
     #[test]
     fn parses_featuring_artists() {
+        let r = RegexConfig::default();
         let inputs = [
             ("Artist & Band - Song", "Artist&Band"),
             ("Artist, Other & Another - Song", "Artist&Other&Another"),
@@ -463,23 +487,26 @@ mod tests {
             ("Artist x Band - Song", "Artist&Band"),
         ];
         for (input_str, expected_output) in inputs {
-            Song::check(input_str, song!(expected_output, "Song"));
+            Song::check(&r, input_str, song!(expected_output, "Song"));
         }
     }
 
     #[test]
     fn parses_year() {
-        Song::check("Band - Song (2024)", year!("Band", "Song", "2024"));
-        Song::check("Band - Song 2024", year!("Band", "Song", "2024"));
+        let r = RegexConfig::default();
+        Song::check(&r, "Band - Song (2024)", year!("Band", "Song", "2024"));
+        Song::check(&r, "Band - Song 2024", year!("Band", "Song", "2024"));
     }
 
     #[test]
     fn parses_track_number() {
-        Song::check("04. Band - Song", album!("04", "Band", "Song"));
+        let r = RegexConfig::default();
+        Song::check(&r, "04. Band - Song", album!("04", "Band", "Song"));
     }
 
     #[test]
     fn parses_remix() {
+        let r = RegexConfig::default();
         let inputs = [
             ("Band - Song [Club Remix]", "Club Remix"),
             ("Band - Song [Instrumental]", "Instrumental"),
@@ -491,12 +518,13 @@ mod tests {
             ("Band - Song (Radio Cut)", "Radio Cut"),
         ];
         for (input_str, expected_output) in inputs {
-            Song::check(input_str, rmx!("Band", "Song", expected_output));
+            Song::check(&r, input_str, rmx!("Band", "Song", expected_output));
         }
     }
 
     #[test]
     fn strips_useless_info() {
+        let r = RegexConfig::default();
         let inputs = [
             "Artist - Song [HQ]",
             "Artist - Song [HD]",
@@ -510,16 +538,25 @@ mod tests {
             "Artist - Song [Full version]",
         ];
         for input_str in inputs {
-            Song::check(input_str, song!("Artist", "Song"));
+            Song::check(&r, input_str, song!("Artist", "Song"));
         }
     }
 
     #[test]
     fn parses_complex_formats() {
-        Song::check("A & B - S (a mix) 2003", rmx!("A&B", "S", "a mix", "2003"));
-        Song::check("「Big」[Band] Song", song!("Big", "Band", "Song"));
-        Song::check("Artist 'Title'", song!("Artist", "Title"));
-        Song::check("Artist 'Title' (Edit)", rmx!("Artist", "Title", "Edit"));
-        Song::check("Artist ‘Title’ (Feat. Band)", song!("Artist&Band", "Title"));
+        let r = RegexConfig::default();
+        Song::check(
+            &r,
+            "A & B - S (a mix) 2003",
+            rmx!("A&B", "S", "a mix", "2003"),
+        );
+        Song::check(&r, "「Big」[Band] Song", song!("Big", "Band", "Song"));
+        Song::check(&r, "Artist 'Title'", song!("Artist", "Title"));
+        Song::check(&r, "Artist 'Title' (Edit)", rmx!("Artist", "Title", "Edit"));
+        Song::check(
+            &r,
+            "Artist ‘Title’ (Feat. Band)",
+            song!("Artist&Band", "Title"),
+        );
     }
 }
