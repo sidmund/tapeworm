@@ -1,9 +1,7 @@
-//! Informational functions.
+//! Informational functionality.
 
-use crate::types;
-use crate::Config;
-use std::fs;
-use std::path::PathBuf;
+use crate::{types, Config};
+use std::{fs, path::PathBuf};
 
 /// Show the library's discovered config files.
 pub fn show(config: &Config) -> types::UnitResult {
@@ -11,16 +9,16 @@ pub fn show(config: &Config) -> types::UnitResult {
     let desc = config.lib_desc.clone().unwrap_or(String::from(""));
     println!("{}: {}", lib, desc);
 
-    if fs::metadata(&config.lib_conf_path.clone().unwrap()).is_ok() {
-        println!("  lib.conf [OK]");
-    } else {
-        println!("  lib.conf [NOT FOUND]");
-    }
-
     if fs::metadata(&config.input_path.clone().unwrap()).is_ok() {
         println!("  input.txt [OK]");
     } else {
         println!("  input.txt [NOT FOUND]");
+    }
+
+    if fs::metadata(&config.lib_conf_path.clone().unwrap()).is_ok() {
+        println!("  lib.conf [OK]");
+    } else {
+        println!("  lib.conf [NOT FOUND]");
     }
 
     if fs::metadata(&config.yt_dlp_conf_path.clone().unwrap()).is_ok() {
@@ -35,16 +33,12 @@ pub fn show(config: &Config) -> types::UnitResult {
 /// Print the list of libraries discovered in the tapeworm config directory.
 pub fn list() -> types::UnitResult {
     let conf_path = PathBuf::from(dirs::config_dir().unwrap()).join("tapeworm");
-    let libraries = fs::read_dir(&conf_path);
-    if libraries.is_err() {
-        return Ok(()); // No need to fail when no libraries are present
+    if let Ok(libraries) = fs::read_dir(&conf_path) {
+        libraries
+            .map(|l| l.unwrap())
+            .filter(|l| l.path().is_dir())
+            .for_each(|l| println!("{}", l.file_name().to_str().unwrap()));
     }
-
-    libraries
-        .unwrap()
-        .map(|l| l.unwrap())
-        .filter(|l| l.path().is_dir())
-        .for_each(|l| println!("{}", l.file_name().to_str().unwrap()));
 
     Ok(())
 }
