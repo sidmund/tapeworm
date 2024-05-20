@@ -236,7 +236,7 @@ impl Config {
         }
 
         if let Some(steps) = &self.steps {
-            let mut commands = Vec::new();
+            let mut commands = Vec::with_capacity(steps.len());
             for step in steps {
                 if step == "add" || step == "process" {
                     return Err(format!(
