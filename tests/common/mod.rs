@@ -6,6 +6,11 @@ use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use tapeworm::Config;
 
+/// # Parameters
+/// - `args`: "command line" arguments
+///
+/// # Returns
+/// - `Result<Config>`: the built Config or an error
 pub fn setup(mut args: Vec<&str>) -> Result<Config, Box<dyn std::error::Error>> {
     args.insert(0, "tapeworm");
     let args = args.into_iter().map(|s| String::from(s));
@@ -21,6 +26,8 @@ pub fn run_with<R: BufRead>(config: Config, reader: R) -> Result<(), Box<dyn std
     tapeworm::run(config, reader)
 }
 
+/// # Returns
+/// - `PathBuf`: the path to the `resources/test` directory
 fn get_resource_path() -> PathBuf {
     PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap())
         .join("resources")
@@ -34,6 +41,11 @@ pub fn copy(filename: &str, to: &PathBuf) {
     fs::copy(get_resource_path().join(filename), to.join(filename)).unwrap();
 }
 
+/// # Parameters
+/// - `name`: the name of the library
+///
+/// # Returns
+/// - `PathBuf`: the path to the created library
 pub fn create_lib(name: &str) -> PathBuf {
     let lib = PathBuf::from(dirs::config_dir().unwrap())
         .join("tapeworm")
@@ -42,6 +54,8 @@ pub fn create_lib(name: &str) -> PathBuf {
     lib
 }
 
+/// # Returns
+/// - `PathBuf` tuple of (library path, input folder, output folder)
 pub fn create_lib_with_folders(name: &str) -> (PathBuf, PathBuf, PathBuf) {
     let lib = create_lib(name);
     let lib_in = lib.join("in");
@@ -56,6 +70,8 @@ pub fn destroy(lib: PathBuf) {
     fs::remove_dir_all(lib).unwrap();
 }
 
+/// # Returns
+/// - `String`: the contents of the file at `path`
 pub fn read(path: PathBuf) -> String {
     fs::read_to_string(path).unwrap()
 }
