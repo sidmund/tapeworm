@@ -103,10 +103,10 @@ fn confirm_downloads<R: BufRead>(config: &Config, mut reader: R) -> types::UnitR
         match choice {
             No => {
                 fs::remove_file(entry)?;
-                println!("Deleted {}.", entry.to_str().unwrap());
+                println!("Deleted {}", entry.to_str().unwrap());
             }
-            Yes => continue,
             YesToAll => break,
+            _ => continue, // Yes
         }
     }
 

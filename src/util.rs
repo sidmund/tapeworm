@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 #[derive(PartialEq)]
 pub enum PromptOption {
+    Edit,
     No,
     Yes,
     YesToAll,
@@ -14,6 +15,7 @@ pub enum PromptOption {
 impl std::fmt::Display for PromptOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            PromptOption::Edit => write!(f, "e"),
             PromptOption::No => write!(f, "n"),
             PromptOption::Yes => write!(f, "y"),
             PromptOption::YesToAll => write!(f, "a"),
@@ -23,19 +25,24 @@ impl std::fmt::Display for PromptOption {
 impl PromptOption {
     fn info(&self) -> String {
         match self {
-            PromptOption::No => "No".to_string(),
-            PromptOption::Yes => "Yes".to_string(),
-            PromptOption::YesToAll => "yes to All".to_string(),
+            PromptOption::Edit => String::from("Edit"),
+            PromptOption::No => String::from("No"),
+            PromptOption::Yes => String::from("Yes"),
+            PromptOption::YesToAll => String::from("yes to All"),
         }
     }
 }
 
 /// Read a line from stdin.
-/// The line is trimmed and converted to lowercase.
-pub fn input<R: BufRead>(mut reader: R) -> types::StringResult {
+/// The line is trimmed and optionally converted to lowercase.
+pub fn input<R: BufRead>(mut reader: R, lowercase: bool) -> types::StringResult {
     let mut input = String::new();
     reader.read_line(&mut input)?;
-    Ok(input.trim().to_lowercase())
+    if lowercase {
+        Ok(input.trim().to_lowercase())
+    } else {
+        Ok(input.trim().to_string())
+    }
 }
 
 /// Prompt the user for confirmation.
@@ -46,7 +53,7 @@ pub fn input<R: BufRead>(mut reader: R) -> types::StringResult {
 /// - `false` if the user enters anything else
 pub fn confirm<R: BufRead>(prompt: &str, default: bool, reader: R) -> types::BoolResult {
     println!("{} {}", prompt, if default { "Y/n" } else { "y/N" });
-    let input = input(reader)?;
+    let input = input(reader, true)?;
     if input.is_empty() {
         Ok(default)
     } else {
@@ -78,8 +85,9 @@ pub fn confirm_with_options<R: BufRead>(
     info.pop(); // Remove trailing ','
     println!("{} ({})", question, info);
 
-    let input = input(&mut reader)?;
+    let input = input(&mut reader, true)?;
     match input.chars().nth(0) {
+        Some('e') if options.contains(&PromptOption::Edit) => Ok(PromptOption::Edit),
         Some('n') if options.contains(&PromptOption::No) => Ok(PromptOption::No),
         Some('y') if options.contains(&PromptOption::Yes) => Ok(PromptOption::Yes),
         Some('a') if options.contains(&PromptOption::YesToAll) => Ok(PromptOption::YesToAll),
@@ -139,7 +147,7 @@ pub fn remove_brackets(s: &str) -> String {
     if s.ends_with(&[')', ']', '}', '>', '】']) {
         result.pop();
     }
-    result
+    String::from(result.trim())
 }
 
 #[cfg(test)]
@@ -152,6 +160,7 @@ mod tests {
         assert_eq!(remove_brackets("[hard remix]"), "hard remix");
         assert_eq!(remove_brackets("{instrumental}"), "instrumental");
         assert_eq!(remove_brackets("<remix>"), "remix");
+        assert_eq!(remove_brackets("( extended mix )"), "extended mix");
     }
 
     #[test]

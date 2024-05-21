@@ -1,6 +1,7 @@
 //! This module provides functionality for extracting tags from a filename.
 
-use crate::{types, util, Config};
+use crate::util::PromptOption::{Edit, No, Yes};
+use crate::{editor, types, util, Config};
 use audiotags::Tag;
 use regex::Regex;
 use std::collections::{HashMap, HashSet};
@@ -32,7 +33,7 @@ impl Default for RegexConfig {
         (?<feat>\((\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\)]*\)|(\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\(\)]*) |
         (?<year>\(\d{4}\)|\d{4}) |
         (?<remix>[\[({<][^\[\](){}<>]*(cut|edit|extend(ed)?(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
-        (?<album>【[^【】]*(?<album_rmv>F.C)[^【】]*】) |
+        (?<album>[\[\(【][^\[\]\(\)【】]*(?<album_rmv>F.C)[^\[\]\(\)【】]*[\]\)】]) |
         (?<strip>[\[({<][^\[\](){}<>]*(full\sversion|(official\s)?((music\s)?video|audio)|m/?v|hq|hd)[^\[\](){}<>]*[\])}>])
         ",
             ).unwrap(),
@@ -82,15 +83,17 @@ pub fn tag<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
             continue;
         };
 
-        let track_no = tags.get("track_no").map(|n| n.parse::<u16>().ok().unwrap());
-        let year = tags.get("year").map(|y| y.parse::<i32>().ok().unwrap());
-        let genre = tags.get("genre").map(|g| g.as_str());
         let old_album = ftag.album().map(|a| String::from(a.title));
-        let album = tags.get("album").map(|a| a.to_owned());
         let old_album_artist = ftag.album_artist().map(|a| String::from(a));
         let old_artist = ftag.artist().map(|a| String::from(a));
-        let mut artist: Option<String> = None;
+
+        let mut album = tags.get("album").map(|a| a.to_owned());
+        let mut album_artist = None;
+        let mut artist = None;
+        let mut genre = tags.get("genre").map(|g| g.to_owned());
         let mut title = tags.get("title").map(|t| t.to_owned());
+        let mut track_no = tags.get("track_no").map(|n| n.parse::<u16>().ok().unwrap());
+        let mut year = tags.get("year").map(|y| y.parse::<i32>().ok().unwrap());
 
         // Obtain all artists
         let mut multiple = HashSet::new(); // No dupes
@@ -100,83 +103,120 @@ pub fn tag<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
         if let Some(author) = tags.get("author") {
             multiple.extend(author.split("&").map(|s| s.to_string()));
         }
+        let mut multiple: Vec<String> = multiple.into_iter().collect();
 
-        if !multiple.is_empty() {
-            let mut multiple = multiple.iter().map(|s| s.to_owned());
-            artist = Some(multiple.next().unwrap()); // First is treated as main artist
-
-            // Modify the title with 'featuring' info for the remaining artists, e.g. "Song (Alice, Bob & Charlie)"
-            if let Some(mut feat) = multiple.reduce(|a, b| format!("{}, {}", a, b)) {
-                if let Some(i) = feat.rfind(',') {
-                    feat.replace_range(i..=i, " &");
+        loop {
+            // Set the artist from the last found artist (order is random from HashSet)
+            let mut featuring = String::new();
+            for (i, a) in multiple.iter().enumerate() {
+                if i == 0 {
+                    artist = Some(String::from(a));
+                } else if i == multiple.len() - 1 {
+                    featuring.push_str(a);
+                } else {
+                    featuring.push_str(&format!("{}, ", String::from(a)));
                 }
-                title = Some(format!("{} ({})", title.unwrap_or(String::new()), feat));
             }
-        }
+            title = title_from(title, featuring, tags.get("remix"));
+            let new_filename = filename_from(&filename, &artist, &old_artist, &title);
 
-        // Modify the title with 'remix' info, e.g. "Song (Alice) [Radio Edit]"
-        if let Some(remix) = tags.get("remix") {
-            title = Some(format!("{} [{}]", title.unwrap_or(String::new()), remix));
-        }
-
-        let new_filename = if let Some(artist) = artist.clone() {
-            if let Some(title) = title.clone() {
-                format!("{} - {}.mp3", artist, title)
-            } else {
-                format!("{}.mp3", artist)
-            }
-        } else if let Some(title) = title.clone() {
-            if let Some(tag_artist) = ftag.artist() {
-                // When filename led to only title being extracted, but the artist tag was set by
-                // yt-dlp, e.g. "Song.mp3" only gives tags "title: Song" but yt-dlp set the artist
-                format!("{} - {}.mp3", tag_artist, title)
-            } else {
-                format!("{}.mp3", title)
-            }
-        } else {
-            filename.clone()
-        };
-
-        println!("\nProposed changes:");
-        print_proposal("ARTIST", &old_artist, &artist);
-        if old_album.is_some() || album.is_some() {
-            print_proposal("ALBUM_ARTIST", &old_album_artist, &artist);
-        }
-        print_proposal("ALBUM", &old_album, &album);
-        print_proposal("TRACK", &ftag.track_number(), &track_no);
-        print_proposal("TITLE", &ftag.title(), &title.as_ref().map(|s| s.as_str()));
-        print_proposal("YEAR", &ftag.year(), &year);
-        print_proposal("GENRE", &ftag.genre(), &genre);
-        print_proposal("FILENAME", &Some(&filename), &Some(&new_filename));
-
-        if util::confirm("Accept these changes?", true, &mut reader)? {
-            if let Some(artist) = artist.clone() {
-                ftag.set_artist(&artist);
-            }
+            // TODO move to a function
+            println!("\nProposed changes:");
+            print_proposal("ARTIST", &old_artist, &artist);
             if old_album.is_some() || album.is_some() {
-                if let Some(artist) = artist {
-                    ftag.set_album_artist(&artist);
-                }
+                print_proposal("ALBUM_ARTIST", &old_album_artist, &album_artist);
             }
-            if let Some(album) = album {
-                ftag.set_album_title(album.as_str());
-            }
-            if let Some(track_no) = track_no {
-                ftag.set_track_number(track_no);
-            }
-            if let Some(title) = title {
-                ftag.set_title(title.as_str());
-            }
-            if let Some(year) = year {
-                ftag.set_year(year);
-            }
-            if let Some(genre) = genre {
-                ftag.set_genre(genre);
-            }
-            ftag.write_to_path(entry.to_str().unwrap())?;
+            print_proposal("ALBUM", &old_album, &album);
+            print_proposal("TRACK", &ftag.track_number(), &track_no);
+            print_proposal("TITLE", &ftag.title(), &title.as_ref().map(|s| s.as_str()));
+            print_proposal("YEAR", &ftag.year(), &year);
+            print_proposal("GENRE", &ftag.genre(), &genre.as_ref().map(|s| s.as_str()));
+            print_proposal("FILENAME", &Some(&filename), &Some(&new_filename));
 
-            if new_filename != filename {
-                fs::rename(entry, entry.with_file_name(new_filename))?;
+            let choice = util::confirm_with_options(
+                "Accept these changes?",
+                vec![Yes, No, Edit],
+                Yes,
+                &mut reader,
+            )?;
+            match choice {
+                Edit => {
+                    // TODO move to a function
+                    let edits = editor::edit(&mut reader)?;
+                    for (tag_name, tag_value) in edits {
+                        match tag_name.as_str() {
+                            "ARTIST" => {
+                                if let Some(new_artist) = tag_value {
+                                    let all: HashSet<String> =
+                                        new_artist.split(";").map(|s| s.to_string()).collect();
+                                    multiple = all.into_iter().collect();
+                                } else {
+                                    multiple.clear();
+                                    artist = None;
+                                }
+                            }
+                            "ALBUM" => album = tag_value,
+                            "ALBUM_ARTIST" => album_artist = tag_value,
+                            "GENRE" => genre = tag_value,
+                            "TITLE" => title = tag_value,
+                            "TRACK" => {
+                                if let Some(new_track) = tag_value {
+                                    if let Ok(new_track) = new_track.parse::<u16>() {
+                                        track_no = Some(new_track);
+                                    } else {
+                                        println!("TRACK is not a valid number, ignoring");
+                                    }
+                                } else {
+                                    track_no = None;
+                                }
+                            }
+                            "YEAR" => {
+                                if let Some(new_year) = tag_value {
+                                    if let Ok(new_year) = new_year.parse::<i32>() {
+                                        year = Some(new_year);
+                                    } else {
+                                        println!("YEAR is not a valid number, ignoring");
+                                    }
+                                } else {
+                                    year = None;
+                                }
+                            }
+                            _ => println!("Unsupported tag: '{}', skipping", tag_name),
+                        }
+                    }
+                }
+                Yes => {
+                    // TODO move to a function
+                    if let Some(artist) = artist.clone() {
+                        ftag.set_artist(&artist);
+                    }
+                    if old_album.is_some() || album.is_some() {
+                        if let Some(artist) = artist {
+                            ftag.set_album_artist(&artist);
+                        }
+                    }
+                    if let Some(album) = album {
+                        ftag.set_album_title(&album);
+                    }
+                    if let Some(track_no) = track_no {
+                        ftag.set_track_number(track_no);
+                    }
+                    if let Some(title) = title {
+                        ftag.set_title(&title);
+                    }
+                    if let Some(year) = year {
+                        ftag.set_year(year);
+                    }
+                    if let Some(genre) = genre {
+                        ftag.set_genre(&genre);
+                    }
+                    ftag.write_to_path(entry.to_str().unwrap())?;
+                    if new_filename != filename {
+                        fs::rename(entry, entry.with_file_name(new_filename))?;
+                    }
+                    break;
+                }
+                _ => break, // No, don't write changes
             }
         }
     }
@@ -201,6 +241,56 @@ where
     } else {
         let new = new.as_ref().unwrap();
         println!("  {:<15} {}\n{:<16}> {}", name, old, "", new);
+    }
+}
+
+/// Modify `title` to incorporate featuring artists and remix information.
+/// E.g.: "Theme song (Alice, Bob & Charlie) [Radio Edit]"
+fn title_from(
+    title: Option<String>,
+    featuring_artists: String,
+    remix: Option<&String>,
+) -> Option<String> {
+    let mut new_title = title.clone();
+    if !featuring_artists.is_empty() {
+        let mut feat = featuring_artists;
+        if let Some(i) = feat.rfind(',') {
+            feat.replace_range(i..=i, " &");
+        }
+        new_title = Some(format!("{} ({})", title.unwrap_or(String::new()), feat));
+    }
+    if let Some(remix) = remix {
+        new_title = Some(format!(
+            "{} [{}]",
+            new_title.unwrap_or(String::new()),
+            remix
+        ));
+    }
+    new_title
+}
+
+fn filename_from(
+    filename: &String,
+    artist: &Option<String>,
+    old_artist: &Option<String>,
+    title: &Option<String>,
+) -> String {
+    if let Some(artist) = artist {
+        if let Some(title) = title {
+            format!("{} - {}.mp3", artist, title)
+        } else {
+            format!("{}.mp3", artist)
+        }
+    } else if let Some(title) = title {
+        if let Some(tag_artist) = old_artist {
+            // When filename led to only title being extracted, but the artist tag was set by
+            // yt-dlp, e.g. "Song.mp3" only gives tags "title: Song" but yt-dlp set the artist
+            format!("{} - {}.mp3", tag_artist, title)
+        } else {
+            format!("{}.mp3", title)
+        }
+    } else {
+        String::from(filename)
     }
 }
 

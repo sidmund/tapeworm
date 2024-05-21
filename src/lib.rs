@@ -1,5 +1,6 @@
 mod add;
 mod download;
+mod editor;
 mod info;
 mod organize;
 mod scrape;
