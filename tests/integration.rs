@@ -5,6 +5,11 @@ use common::*;
 use std::{fs, io::BufReader, path::PathBuf};
 
 #[test]
+fn fails_without_command() {
+    assert!(setup(vec![]).is_err());
+}
+
+#[test]
 fn shows_list() {
     run(setup(vec!["list"]).unwrap()).unwrap();
 }
