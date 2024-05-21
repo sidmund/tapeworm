@@ -31,7 +31,7 @@ impl Default for RegexConfig {
         r"(?xi)
         (?<feat>\((\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\)]*\)|(\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\(\)]*) |
         (?<year>\(\d{4}\)|\d{4}) |
-        (?<remix>[\[({<][^\[\](){}<>]*(cut|edit|extended(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
+        (?<remix>[\[({<][^\[\](){}<>]*(cut|edit|extend(ed)?(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\](){}<>]*[\])}>]) |
         (?<album>【[^【】]*(?<album_rmv>F.C)[^【】]*】) |
         (?<strip>[\[({<][^\[\](){}<>]*(full\sversion|(official\s)?((music\s)?video|audio)|m/?v|hq|hd)[^\[\](){}<>]*[\])}>])
         ",

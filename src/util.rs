@@ -23,9 +23,9 @@ impl std::fmt::Display for PromptOption {
 impl PromptOption {
     fn info(&self) -> String {
         match self {
-            PromptOption::No => "no".to_string(),
-            PromptOption::Yes => "yes".to_string(),
-            PromptOption::YesToAll => "yes to all".to_string(),
+            PromptOption::No => "No".to_string(),
+            PromptOption::Yes => "Yes".to_string(),
+            PromptOption::YesToAll => "yes to All".to_string(),
         }
     }
 }
@@ -63,12 +63,13 @@ pub fn confirm_with_options<R: BufRead>(
     assert!(!options.is_empty());
 
     let mut question = String::from(prompt);
+    question.push(' ');
     let mut info = String::new();
     for option in &options {
         if &default == option {
-            question = question + &format!(" {}/", option).to_uppercase();
+            question = question + &format!("{}/", option).to_uppercase();
         } else {
-            question = question + &format!(" {}/", option);
+            question = question + &format!("{}/", option);
         }
         info = info + &format!("{}, ", option.info());
     }

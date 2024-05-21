@@ -39,6 +39,7 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
     if config.verbose {
         println!("Downloading {} URLs:", inputs.len());
         inputs.iter().for_each(|s| println!("  {}", s));
+        println!();
     }
     yt_dlp(yt_dlp_conf_path, inputs)?;
 
@@ -86,13 +87,13 @@ fn confirm_downloads<R: BufRead>(config: &Config, mut reader: R) -> types::UnitR
     }
     let total = downloads.len();
 
-    println!("Downloaded {} files:", total);
+    println!("\nDownloaded {} files:", total);
     downloads
         .iter()
-        .for_each(|d| println!("{}", d.to_str().unwrap()));
+        .for_each(|d| println!("  {}", d.to_str().unwrap()));
 
     for (i, entry) in downloads.iter().enumerate() {
-        println!("\nFile {} of {}: {}", i, total, entry.to_str().unwrap());
+        println!("\nFile {} of {}: {}", i + 1, total, entry.to_str().unwrap());
         let choice = util::confirm_with_options(
             "Keep this?",
             vec![Yes, No, YesToAll],
