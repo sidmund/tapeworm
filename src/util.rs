@@ -5,6 +5,31 @@ use std::fs;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
+#[derive(PartialEq)]
+pub enum PromptOption {
+    No,
+    Yes,
+    YesToAll,
+}
+impl std::fmt::Display for PromptOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PromptOption::No => write!(f, "n"),
+            PromptOption::Yes => write!(f, "y"),
+            PromptOption::YesToAll => write!(f, "a"),
+        }
+    }
+}
+impl PromptOption {
+    fn info(&self) -> String {
+        match self {
+            PromptOption::No => "no".to_string(),
+            PromptOption::Yes => "yes".to_string(),
+            PromptOption::YesToAll => "yes to all".to_string(),
+        }
+    }
+}
+
 /// Read a line from stdin.
 /// The line is trimmed and converted to lowercase.
 pub fn input<R: BufRead>(mut reader: R) -> types::StringResult {
@@ -26,6 +51,42 @@ pub fn confirm<R: BufRead>(prompt: &str, default: bool, reader: R) -> types::Boo
         Ok(default)
     } else {
         Ok(input.starts_with('y'))
+    }
+}
+
+pub fn confirm_with_options<R: BufRead>(
+    prompt: &str,
+    options: Vec<PromptOption>,
+    default: PromptOption,
+    mut reader: R,
+) -> types::PromptOptionResult {
+    assert!(!options.is_empty());
+
+    let mut question = String::from(prompt);
+    let mut info = String::new();
+    for option in &options {
+        if &default == option {
+            question = question + &format!(" {}/", option).to_uppercase();
+        } else {
+            question = question + &format!(" {}/", option);
+        }
+        info = info + &format!("{}, ", option.info());
+    }
+    question.pop(); // Remove trailing '/'
+    info.pop(); // Remove trailing ' '
+    info.pop(); // Remove trailing ','
+    println!("{} ({})", question, info);
+
+    let input = input(&mut reader)?;
+    match input.chars().nth(0) {
+        Some('n') if options.contains(&PromptOption::No) => Ok(PromptOption::No),
+        Some('y') if options.contains(&PromptOption::Yes) => Ok(PromptOption::Yes),
+        Some('a') if options.contains(&PromptOption::YesToAll) => Ok(PromptOption::YesToAll),
+        Some(_) => {
+            println!("Invalid option. Please try again");
+            confirm_with_options(prompt, options, default, reader)
+        }
+        None => Ok(default),
     }
 }
 

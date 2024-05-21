@@ -88,6 +88,7 @@ This specifies library settings, in newline-separated `name=value` pairs. If thi
 | Setting | Default | Command | Description |
 |:-|:-|:-|:-|
 | CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
+| CONFIRM_DOWNLOADS | false | `download` | By default, `download` will simply exit when done, and all downloaded files are kept. If this setting is enabled however, the user will be asked to confirm or delete each downloaded file. E.g. this option comes in useful when downloading from queries, as the results can be different than expected. |
 | DESCRIPTION | | `show` | Description of the library, used for informational purposes |
 | INPUT_DIR | | `tag`, `deposit` | The folder where the `tag` and `deposit` commands take their inputs from. If you use the `download` command, you'll generally want yt-dlp to put its downloads into this folder, so they can be processed further. The folder is either a LIBRARY-relative path or an absolute path. **Required** for `tag` and `deposit` commands. |
 | ORGANIZE | | `deposit` | By default `deposit` simply drops files straight in the target folder. If this option is specified, it will organize the files instead, per one of the following methods: "A-Z" will make it move files into alphabetic subdirectories. See the example below. **Requires** `TARGET_DIR`. |
