@@ -118,6 +118,8 @@ TARGET_DIR/H/hello.mp3
 TARGET_DIR/P/painting.jpg
 ```
 
+Keep in mind that only files are moved, not subfolders of `INPUT_DIR`. So you cannot specify subfolders in yt-dlp's `-P` or `-o` options, if you want it to work with `tag` and/or `deposit` commands.
+
 #### input.txt
 
 This file is created the first time `tapeworm add LIBRARY URL|TERM...` is issued. Each line is treated as a separate URL or query. Note that `TERM...` is added as a YouTube search query.
