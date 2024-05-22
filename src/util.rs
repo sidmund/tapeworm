@@ -1,6 +1,7 @@
 //! Utility functions.
 
 use crate::types;
+use chrono::{self, Datelike};
 use std::fs;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
@@ -129,6 +130,15 @@ pub fn filepaths_in(dir: PathBuf) -> types::VecPathBufResult {
         })
         .map(|e| e.unwrap().path())
         .collect())
+}
+
+/// Returns tuple of (year, month)
+pub fn date_from_unix_timestamp(timestamp: i64) -> types::DateResult {
+    if let Some(dt) = chrono::DateTime::from_timestamp(timestamp, 0) {
+        Ok((dt.year(), dt.month()))
+    } else {
+        Err(format!("Invalid timestamp: {}", timestamp).into())
+    }
 }
 
 /// Remove a string in its entirety from another string.

@@ -40,7 +40,8 @@ pub struct Config {
     // Deposit options
     /// If `None`, will cause `deposit` to simply drop files in the `target_dir`.
     /// Otherwise, it will be organized into the `target_dir` per below:
-    /// - "A-Z": Sort into alphabetic subfolders, and possibly ARTIST and ALBUM subfolders
+    /// - "A-Z": Sort into `A-Z/ARTIST?/ALBUM?` subfolders
+    /// - "DATE": Sort into `YYYY/MM` subfolders
     pub organize: Option<String>,
     pub target_dir: Option<PathBuf>,
 
@@ -265,7 +266,7 @@ pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
             "add" => add::add(&config)?,
             "download" => download::download(&config, &mut reader)?,
             "tag" => tag::tag(&config, &mut reader)?,
-            "deposit" => organize::deposit(&config, &mut reader)?,
+            "deposit" => organize::run(&config, &mut reader)?,
             _ => return Err("Unrecognized command. See 'help'".into()),
         }
     }

@@ -2,32 +2,29 @@
 
 use crate::{types, util, Config};
 use audiotags::Tag;
-use std::{fs, io::BufRead, path::PathBuf};
+use std::fs;
+use std::io::BufRead;
+use std::os::unix::fs::MetadataExt;
+use std::path::PathBuf;
 
-/// Attempt to move all downloaded (and processed) files in INPUT_DIR to TARGET_DIR.
-/// TARGET_DIR is created if not present.
-/// Directories are not moved, only files.
-/// If a file already exists in TARGET_DIR, it will be overwritten.
+/// Attempt to move all downloaded (and processed) files in INPUT_DIR to TARGET_DIR. TARGET_DIR is
+/// created if not present. Only files are moved, not folders. If a file already exists in
+/// TARGET_DIR, it will be overwritten upon user confirmation.
 ///
 /// If ORGANIZE is specified, files will be moved to organized subdirectories of TARGET_DIR,
 /// according to the organization mode.
-pub fn deposit<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
+pub fn run<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
     if config.target_dir.is_none() {
-        return Err("'TARGET_DIR' must be set for moving downloads. See 'help'".into());
+        return Err("'TARGET_DIR' required for moving downloads. See 'help'".into());
     } else if config.input_dir.is_none() {
-        return Err(
-            "'INPUT_DIR' must be set for moving downloads to 'TARGET_DIR'. See 'help'".into(),
-        );
+        return Err("'INPUT_DIR' required for moving downloads to 'TARGET_DIR'. See 'help'".into());
     }
 
     let func = if let Some(mode) = &config.organize {
         match mode.as_str() {
-            "A-Z" => organize,
-            _ => {
-                return Err(
-                    format!("Unrecognized organization mode: '{}'. See 'help'", mode).into(),
-                )
-            }
+            "A-Z" => alphabetical,
+            "DATE" => chronological,
+            _ => return Err(format!("Invalid organization mode: '{}'. See 'help'", mode).into()),
         }
     } else {
         drop
@@ -44,7 +41,7 @@ pub fn deposit<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
     let target_dir = lib_path.join(config.target_dir.clone().unwrap());
     let target_dir = util::guarantee_dir_path(target_dir)?;
 
-    if let Some(errors) = func(target_dir, downloads, reader) {
+    if let Some(errors) = deposit(target_dir, downloads, func, reader) {
         return Err(format!(
             "Could not move {} files to target directory:{}",
             errors.len(),
@@ -58,12 +55,46 @@ pub fn deposit<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
     Ok(())
 }
 
-/// Organize the `downloads` files into subfolders of `target_dir`.
-/// If the 'artist' tag is present, a subfolder for the artist is created.
-/// If the 'album' tag is present, a further subfolder for the album is created.
-/// If the tag is not present, the artist is guessed from the filename,
-/// i.e. the part to the left of '-'.
-/// If that fails, the first letter of the filename is used.
+/// Sort the `file` into a dated subfolder of `target_dir`:
+/// `target_dir/YYYY/MM/file.ext`, where `YYYY` and `MM` are determined from file creation date.
+///
+/// Examples:
+/// - `randomfile.jpg` created at 2024-04-29    -> `target_dir/2024/04/randomfile.jpg`
+/// - `Artist - Song.mp3` created at 2024-05-15 -> `target_dir/2024/05/Artist - Song.mp3`
+fn chronological(target_dir: &PathBuf, file: &PathBuf) -> Result<PathBuf, String> {
+    let filename = file.file_name().unwrap().to_owned().into_string().unwrap();
+
+    let target = if let Ok(meta) = fs::metadata(&file) {
+        let last_modification_time = meta.mtime();
+        if let Ok((year, month)) = util::date_from_unix_timestamp(last_modification_time) {
+            target_dir
+                .join(year.to_string())
+                .join(format!("{:02}", month))
+        } else {
+            return Err(format!("! Could not determine date for: {}", filename));
+        }
+    } else {
+        return Err(format!("! Invalid path or no permission: {}", filename));
+    };
+
+    let target_path = target.clone();
+    let target = util::guarantee_dir_path(target);
+    if let Err(e) = target {
+        Err(format!(
+            "! Could not create target dir: {}\n    {}",
+            target_path.display(),
+            e
+        ))
+    } else {
+        Ok(target.unwrap().join(filename))
+    }
+}
+
+/// Sort the `file` into an alphabetical subfolder of `target_dir`:
+/// `target_dir/A-Z/ARTIST?/ALBUM?/file.ext`, where ARTIST and ALBUM are optional (determined from
+/// file tags). The letter `A-Z` subfolder is based on the ARTIST tag. If the ARTIST tag is not
+/// present, the artist is guessed from the filename (if there is a part to the left of a '-'
+/// separator). If that fails, the first letter of the filename is used.
 ///
 /// Examples:
 /// - `randomfile.jpg`                         -> `target_dir/R/randomfile.jpg`
@@ -72,95 +103,77 @@ pub fn deposit<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
 /// - `Band - Song.mp3 with artist tag 'Band'` -> `target_dir/B/Band/Band - Song.mp3`
 /// - `Band - Song.mp3 without artist tag`     -> `target_dir/B/Band/Band - Song.mp3`
 /// - `Band - Song.mp3 with artist, album tag` -> `target_dir/B/Band/Album/Band - Song.mp3`
-fn organize<R: BufRead>(
-    target_dir: PathBuf,
-    downloads: Vec<PathBuf>,
-    mut reader: R,
-) -> types::OptionVecString {
-    println!("Sorting files into {}...", target_dir.display());
+fn alphabetical(target_dir: &PathBuf, file: &PathBuf) -> Result<PathBuf, String> {
+    let filename = file.file_name().unwrap().to_owned().into_string().unwrap();
+    let tag = Tag::new().read_from_path(&file);
 
-    let mut errors = Vec::new();
+    let mut target = None;
 
-    for entry in downloads {
-        println!();
-
-        let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
-        let tag = Tag::new().read_from_path(&entry);
-
-        let mut target = None;
-
-        if let Ok(tag) = &tag {
-            // Attempt to get the ARTIST from tag
-            if let Some(artist) = tag.artist() {
-                target = Some(target_dir.join(letter_for(artist)).join(artist));
-            }
-        }
-        if target.is_none() {
-            // Attempt to get the ARTIST from filename
-            if let Some((author, _)) = filename.split_once('-') {
-                let author = author.trim();
-                if !author.is_empty() {
-                    target = Some(target_dir.join(letter_for(&author)).join(author));
-                }
-            }
-        }
-        if target.is_some() {
-            // Now that ARTIST is set, try to also set the ALBUM subfolder (from tag)
-            if let Ok(tag) = &tag {
-                if let Some(album) = tag.album_title() {
-                    target = Some(target.unwrap().join(album));
-                }
-            }
-        } else {
-            // No ARTIST, default to 'LETTER/' subfolder only
-            target = Some(target_dir.join(letter_for(&filename)));
-        }
-
-        let target_path = target.clone().unwrap();
-        let target = util::guarantee_dir_path(target.unwrap());
-        if target.is_err() {
-            errors.push(format!(
-                "! Could not create target dir: {}\n    {}",
-                target_path.display(),
-                target.unwrap_err()
-            ));
-            continue;
-        }
-        let target = target.unwrap().join(filename);
-
-        if !overwrite(&target, &mut reader) {
-            println!("  Skipping {}", entry.display());
-            continue;
-        }
-
-        if let Some(error) = rename(entry, target) {
-            errors.push(error);
+    if let Ok(tag) = &tag {
+        // Attempt to get the ARTIST from tag
+        if let Some(artist) = tag.artist() {
+            target = Some(target_dir.join(letter_for(artist)).join(artist));
         }
     }
-
-    if errors.is_empty() {
-        None
+    if target.is_none() {
+        // Attempt to get the ARTIST from filename
+        if let Some((author, _)) = filename.split_once('-') {
+            let author = author.trim();
+            if !author.is_empty() {
+                target = Some(target_dir.join(letter_for(&author)).join(author));
+            }
+        }
+    }
+    if target.is_some() {
+        // Now that ARTIST is set, try to also set the ALBUM subfolder (from tag)
+        if let Ok(tag) = &tag {
+            if let Some(album) = tag.album_title() {
+                target = Some(target.unwrap().join(album));
+            }
+        }
     } else {
-        Some(errors)
+        // No ARTIST, default to 'LETTER/' subfolder only
+        target = Some(target_dir.join(letter_for(&filename)));
+    }
+
+    let target_path = target.clone().unwrap();
+    let target = util::guarantee_dir_path(target.unwrap());
+    if target.is_err() {
+        Err(format!(
+            "! Could not create target dir: {}\n    {}",
+            target_path.display(),
+            target.unwrap_err()
+        ))
+    } else {
+        Ok(target.unwrap().join(filename))
     }
 }
 
-/// Simply drop the `downloads` files directly in `target_dir`.
-fn drop<R: BufRead>(
+/// Drop the `file` file directly in `target_dir`.
+fn drop(target_dir: &PathBuf, file: &PathBuf) -> Result<PathBuf, String> {
+    let filename = file.file_name().unwrap().to_owned().into_string().unwrap();
+    Ok(target_dir.join(filename))
+}
+
+fn deposit<R: BufRead>(
     target_dir: PathBuf,
     downloads: Vec<PathBuf>,
+    func: fn(&PathBuf, &PathBuf) -> Result<PathBuf, String>,
     mut reader: R,
 ) -> types::OptionVecString {
-    println!("Dropping files into {}...", target_dir.display());
+    println!("Moving files to {}...", target_dir.display());
 
     let mut errors = Vec::new();
 
     for entry in downloads {
         println!();
 
-        let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
-
-        let target = target_dir.join(filename);
+        let target = func(&target_dir, &entry);
+        if let Err(e) = target {
+            errors.push(e);
+            continue;
+        }
+        let target = target.unwrap();
 
         if !overwrite(&target, &mut reader) {
             println!("  Skipping {}", entry.display());

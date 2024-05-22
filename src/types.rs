@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 pub type BoolResult = Result<bool, Box<dyn Error>>;
 pub type ConfigResult = Result<Config, Box<dyn Error>>;
+pub type DateResult = Result<(i32, u32), Box<dyn Error>>;
 pub type HashMapResult = Result<HashMap<String, Option<String>>, Box<dyn Error>>;
 pub type HashSetResult = Result<HashSet<String>, Box<dyn Error>>;
 pub type OptionVecString = Option<Vec<String>>;

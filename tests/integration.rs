@@ -276,34 +276,45 @@ fn fails_deposit_on_incorrect_args() {
     destroy(lib_path);
 }
 
-fn deposit(lib: &str, drop: bool, filename: &str, organize_path: &PathBuf) {
+fn deposit(lib: &str, mode: &str, filename: &str, az_path: &PathBuf, date_path: &PathBuf) {
     let (lib_path, lib_in, lib_out) = create_lib_with_folders(lib);
 
     copy(filename, &lib_in);
+
     let original_path = lib_in.join(filename);
     let drop_path = lib_out.join(filename);
-    let organize_path = lib_out.join(organize_path).join(filename);
-
-    assert!(fs::metadata(&original_path).is_ok());
+    let az_path = lib_out.join(az_path).join(filename);
+    let date_path = lib_out.join(date_path).join(filename);
     assert!(fs::metadata(&drop_path).is_err());
-    assert!(fs::metadata(&organize_path).is_err());
+    assert!(fs::metadata(&az_path).is_err());
+    assert!(fs::metadata(&date_path).is_err());
 
     let i = lib_in.to_str().unwrap();
     let o = lib_out.to_str().unwrap();
-    let opts = if drop {
-        vec!["deposit", lib, "-i", i, "-o", o]
-    } else {
-        vec!["deposit", lib, "-i", i, "-o", o, "-d", "A-Z"]
+    let opts = match mode {
+        "A-Z" => vec!["deposit", lib, "-i", i, "-o", o, "-d", "A-Z"],
+        "DATE" => vec!["deposit", lib, "-i", i, "-o", o, "-d", "DATE"],
+        _ => vec!["deposit", lib, "-i", i, "-o", o],
     };
     run(setup(opts).unwrap()).unwrap();
 
     assert!(fs::metadata(original_path).is_err());
-    if drop {
-        assert!(fs::metadata(drop_path).is_ok());
-        assert!(fs::metadata(organize_path).is_err());
-    } else {
-        assert!(fs::metadata(drop_path).is_err());
-        assert!(fs::metadata(organize_path).is_ok());
+    match mode {
+        "A-Z" => {
+            assert!(fs::metadata(drop_path).is_err());
+            assert!(fs::metadata(az_path).is_ok());
+            assert!(fs::metadata(date_path).is_err());
+        }
+        "DATE" => {
+            assert!(fs::metadata(drop_path).is_err());
+            assert!(fs::metadata(az_path).is_err());
+            assert!(fs::metadata(date_path).is_ok());
+        }
+        _ => {
+            assert!(fs::metadata(drop_path).is_ok());
+            assert!(fs::metadata(az_path).is_err());
+            assert!(fs::metadata(date_path).is_err());
+        }
     }
 
     destroy(lib_path);
@@ -312,16 +323,25 @@ fn deposit(lib: &str, drop: bool, filename: &str, organize_path: &PathBuf) {
 #[test]
 fn deposits() {
     let files = [
-        ("no_tags.mp3", PathBuf::from("N")),
-        ("tagged.mp3", PathBuf::from("A").join("Artist")),
+        (
+            "no_tags.mp3",
+            PathBuf::from("N"),
+            PathBuf::from("2024").join("05"),
+        ),
+        (
+            "tagged.mp3",
+            PathBuf::from("A").join("Artist"),
+            PathBuf::from("2024").join("05"),
+        ),
         (
             "tagged_album.mp3",
             PathBuf::from("A").join("Artist").join("Album"),
+            PathBuf::from("2024").join("05"),
         ),
     ];
-    for (filename, organize_path) in files {
-        for drop in [true, false] {
-            deposit("tw-test-deposit", drop, filename, &organize_path);
+    for (filename, az_path, date_path) in files {
+        for drop in ["A-Z", "DATE", "x"] {
+            deposit("tw-test-deposit", drop, filename, &az_path, &date_path);
         }
     }
 }
