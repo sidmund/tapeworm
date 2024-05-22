@@ -5,6 +5,7 @@ use chrono::{self, Datelike};
 use std::fs;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 
 #[derive(PartialEq)]
 pub enum PromptOption {
@@ -138,6 +139,23 @@ pub fn date_from_unix_timestamp(timestamp: i64) -> types::DateResult {
         Ok((dt.year(), dt.month()))
     } else {
         Err(format!("Invalid timestamp: {}", timestamp).into())
+    }
+}
+
+/// Parse a `Option<String>` into an `Option<F>`.
+///
+/// # Returns
+/// - `Err` if parsing failed
+/// - `Option<F>` on success
+pub fn parse<F: FromStr>(value: Option<String>) -> Result<Option<F>, Box<dyn std::error::Error>> {
+    if let Some(value) = value {
+        if let Ok(value) = value.parse::<F>() {
+            Ok(Some(value))
+        } else {
+            Err(format!("Invalid value: {}", value).into())
+        }
+    } else {
+        Ok(None)
     }
 }
 
