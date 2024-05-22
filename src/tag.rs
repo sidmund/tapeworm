@@ -227,7 +227,7 @@ fn print_proposal<T: std::fmt::Display + PartialEq>(name: &str, old: &Option<T>,
 ///
 /// Titles generally contain extra information, e.g. "Artist ft. Band - Song (2024) [Remix]"
 /// Information such as collaborating artists, year, remix, etc. are extracted.
-pub fn tag<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
+pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
     if config.input_dir.is_none() {
         return Err("'INPUT_DIR' must be set. See 'help'".into());
     }

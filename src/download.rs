@@ -8,7 +8,7 @@ use std::io::{BufRead, BufReader, ErrorKind};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-pub fn download<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
+pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
     let mut yt_dlp_conf_path = config.yt_dlp_conf_path.clone();
     if fs::metadata(yt_dlp_conf_path.as_ref().unwrap()).is_err() {
         println!(

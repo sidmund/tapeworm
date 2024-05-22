@@ -5,7 +5,7 @@ use url::Url;
 
 /// Attempts to append all terms to the input file.
 /// The library folder and input file are created if they do not exist.
-pub fn add(config: &Config) -> types::UnitResult {
+pub fn run(config: &Config) -> types::UnitResult {
     util::guarantee_dir_path(config.lib_path.clone().unwrap())?;
 
     let terms = config.terms.as_ref().unwrap().iter().map(|s| s.to_string());

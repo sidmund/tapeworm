@@ -1,8 +1,8 @@
 mod add;
+mod deposit;
 mod download;
 mod editor;
 mod info;
-mod organize;
 mod scrape;
 mod tag;
 mod types;
@@ -263,10 +263,10 @@ pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
         match command.as_str() {
             "list" => info::list()?,
             "show" => info::show(&config)?,
-            "add" => add::add(&config)?,
-            "download" => download::download(&config, &mut reader)?,
-            "tag" => tag::tag(&config, &mut reader)?,
-            "deposit" => organize::run(&config, &mut reader)?,
+            "add" => add::run(&config)?,
+            "download" => download::run(&config, &mut reader)?,
+            "tag" => tag::run(&config, &mut reader)?,
+            "deposit" => deposit::run(&config, &mut reader)?,
             _ => return Err("Unrecognized command. See 'help'".into()),
         }
     }
