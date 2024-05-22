@@ -2,9 +2,9 @@
 
 use crate::{types, util, Config};
 use audiotags::Tag;
+use chrono::{DateTime, Datelike, Utc};
 use std::fs;
 use std::io::BufRead;
-use std::os::unix::fs::MetadataExt;
 use std::path::PathBuf;
 
 /// Attempt to move all downloaded (and processed) files in INPUT_DIR to TARGET_DIR. TARGET_DIR is
@@ -65,13 +65,13 @@ fn chronological(target_dir: &PathBuf, file: &PathBuf) -> Result<PathBuf, String
     let filename = file.file_name().unwrap().to_owned().into_string().unwrap();
 
     let target = if let Ok(meta) = fs::metadata(&file) {
-        let last_modification_time = meta.mtime();
-        if let Ok((year, month)) = util::date_from_unix_timestamp(last_modification_time) {
+        if let Ok(created) = meta.created() {
+            let created: DateTime<Utc> = created.into();
             target_dir
-                .join(year.to_string())
-                .join(format!("{:02}", month))
+                .join(created.year().to_string())
+                .join(format!("{:02}", created.month()))
         } else {
-            return Err(format!("! Could not determine date for: {}", filename));
+            return Err(String::from("! Unsupported platform: can't get file date"));
         }
     } else {
         return Err(format!("! Invalid path or no permission: {}", filename));
