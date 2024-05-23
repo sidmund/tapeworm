@@ -156,17 +156,18 @@ fn tag_skips_unsupported_files() {
     destroy(lib_path);
 }
 
-#[test]
-fn tags_file_with_title_tag() {
+fn tag(ext: &str) {
     let lib = "tw-test-tag-yes";
     let lib_path = create_lib(lib);
 
-    copy("title.mp3", &lib_path);
+    let file = format!("title.{}", ext);
+    copy(&file, &lib_path);
 
-    assert!(fs::metadata(lib_path.join("Artist - Song [Radio Edit].mp3")).is_err());
-    let tag = Tag::new()
-        .read_from_path(lib_path.join("title.mp3"))
-        .unwrap();
+    let mut expected = lib_path.join("Artist - Song [Radio Edit]");
+    expected.set_extension(ext);
+
+    assert!(fs::metadata(&expected).is_err());
+    let tag = Tag::new().read_from_path(lib_path.join(&file)).unwrap();
     assert_eq!(tag.title().unwrap(), "Artist - Song (Radio Edit)");
     assert_eq!(tag.artist(), None);
 
@@ -175,14 +176,18 @@ fn tags_file_with_title_tag() {
     let config = setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap();
     run_with(config, reader).unwrap();
 
-    assert!(fs::metadata(lib_path.join("title.mp3")).is_err());
-    let tag = Tag::new()
-        .read_from_path(lib_path.join("Artist - Song [Radio Edit].mp3"))
-        .unwrap();
+    assert!(fs::metadata(lib_path.join(&file)).is_err());
+    let tag = Tag::new().read_from_path(&expected).unwrap();
     assert_eq!(tag.title().unwrap(), "Song [Radio Edit]");
     assert_eq!(tag.artist().unwrap(), "Artist");
 
     destroy(lib_path);
+}
+
+#[test]
+fn tags_diverse_audio_formats_with_title_tag() {
+    tag("mp3");
+    tag("flac");
 }
 
 #[test]

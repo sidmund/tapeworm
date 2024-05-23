@@ -250,6 +250,8 @@ tapeworm process pics
 
 ## Tagging
 
+> NB: Tagging only works with the formats that the [audiotags](https://docs.rs/audiotags/latest/audiotags/#supported-formats) crate supports.
+
 The tagging feature exploits the information often contained in an uploaded video title, for example: `The Band ft. Artist - A Song (2000) [Instrumental]`. In order for this to work, make sure your `yt-dlp.conf` is set up with metadata options. The tagger uses the `title` metadata, so at least that field should be set (setting `--embed-metadata` is enough for this). See the music library example under [Examples](#examples).
 
 The tagging feature also changes the filename to a standardized format: `ARTIST - TITLE (FEAT...)? [REMIX]?`.
