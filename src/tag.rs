@@ -4,7 +4,7 @@ use crate::util::PromptOption::{Edit, No, Yes};
 use crate::{editor, types, util, Config};
 use audiotags::{AudioTag, Tag};
 use regex::Regex;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::{fs, io::BufRead, path::PathBuf};
 
 struct RegexConfig {
@@ -45,9 +45,10 @@ impl Default for RegexConfig {
 struct TagProposal {
     album: Option<String>,
     album_artist: Option<String>,
-    all_artists: Option<HashSet<String>>,
+    all_artists: Option<Vec<String>>,
     artist: Option<String>,
     filename: String,
+    final_title: Option<String>,
     genre: Option<String>,
     remix: Option<String>,
     title: Option<String>,
@@ -55,22 +56,23 @@ struct TagProposal {
     year: Option<i32>,
 }
 impl TagProposal {
-    fn feature(&mut self, artists: HashSet<String>) {
+    fn feature(&mut self, artists: Vec<String>) {
         if self.all_artists.is_none() {
-            self.all_artists = Some(artists);
-        } else {
-            self.all_artists.as_mut().unwrap().extend(artists);
+            self.all_artists = Some(Vec::with_capacity(artists.len()));
+        }
+
+        for artist in artists {
+            if !self.all_artists.as_ref().unwrap().contains(&artist) {
+                self.all_artists.as_mut().unwrap().push(artist);
+            }
         }
     }
 
-    /// Update the `artist` field based on the first value in the `all_artists` field.
-    /// Update the `title` field based on the `all_artists` and `remix` fields,
-    /// e.g. "Theme song (Alice, Bob & Charlie) [Radio Edit]".
-    /// Update the `filename` field based on the `artist` and `title` field, and the `old_artist`.
-    fn update(&mut self, old_artist: &Option<String>) {
-        let mut new_title = self.title.clone();
+    /// Update the `artist` field based on the first artist of the `all_artists` field,
+    /// and update the (original) `title` and `filename` based on provided templates.
+    fn update(&mut self, title_template: &String, filename_template: &String) {
+        let mut feat = String::new();
         if let Some(featuring) = &self.all_artists {
-            let mut feat = String::new();
             for (i, a) in featuring.iter().enumerate() {
                 if i == 0 {
                     self.artist = Some(String::from(a));
@@ -84,36 +86,11 @@ impl TagProposal {
                 if let Some(i) = feat.rfind(',') {
                     feat.replace_range(i..=i, " &");
                 }
-                new_title = Some(format!("{} ({})", new_title.unwrap_or(String::new()), feat));
             }
         }
-        if let Some(remix) = &self.remix {
-            new_title = Some(format!(
-                "{} [{}]",
-                new_title.unwrap_or(String::new()),
-                remix
-            ));
-        }
-        self.title = new_title;
 
-        let new_filename = if let Some(artist) = &self.artist {
-            if let Some(title) = &self.title {
-                format!("{} - {}.mp3", artist, title)
-            } else {
-                format!("{}.mp3", artist)
-            }
-        } else if let Some(title) = &self.title {
-            if let Some(tag_artist) = old_artist {
-                // When filename led to only title being extracted, but the artist tag was set by
-                // yt-dlp, e.g. "Song.mp3" only gives tags "title: Song" but yt-dlp set the artist
-                format!("{} - {}.mp3", tag_artist, title)
-            } else {
-                format!("{}.mp3", title)
-            }
-        } else {
-            self.filename.clone()
-        };
-        self.filename = new_filename;
+        self.final_title = Some(self.apply_template(&feat, &self.title, title_template));
+        self.filename = self.apply_template(&feat, &self.final_title, filename_template);
     }
 
     fn present(&self, ftag: &Box<dyn AudioTag + Sync + Send>, old_filename: &String) {
@@ -121,7 +98,7 @@ impl TagProposal {
         let album_artist = self.album_artist.as_ref().map(|s| s.as_str());
         let artist = self.artist.as_ref().map(|s| s.as_str());
         let genre = self.genre.as_ref().map(|s| s.as_str());
-        let title = self.title.as_ref().map(|s| s.as_str());
+        let title = self.final_title.as_ref().map(|s| s.as_str());
 
         println!("\nProposed changes:");
         print_proposal("ARTIST", &ftag.artist(), &artist);
@@ -172,7 +149,6 @@ impl TagProposal {
         self,
         mut ftag: Box<dyn AudioTag + Sync + Send>,
         entry: &PathBuf,
-        old_filename: String,
     ) -> types::UnitResult {
         if let Some(s) = self.album {
             ftag.set_album_title(&s);
@@ -186,7 +162,7 @@ impl TagProposal {
         if let Some(s) = self.artist {
             ftag.set_artist(&s);
         }
-        if let Some(s) = self.title {
+        if let Some(s) = self.final_title {
             ftag.set_title(&s);
         }
         if let Some(i) = self.track {
@@ -197,15 +173,49 @@ impl TagProposal {
         }
         ftag.write_to_path(entry.to_str().unwrap())?;
 
-        if self.filename != old_filename {
-            fs::rename(entry, entry.with_file_name(self.filename))?;
+        let mut to = entry.with_file_name(self.filename);
+        if let Some(ext) = entry.extension() {
+            to.set_extension(ext);
+        }
+        if to != entry.file_name().unwrap() {
+            fs::rename(entry, to)?;
         }
 
         Ok(())
     }
+
+    fn apply_template(&self, feat: &String, title: &Option<String>, template: &String) -> String {
+        let mut s = template.clone();
+
+        s = s.replace("{album}", self.album.as_ref().unwrap_or(&String::new()));
+        s = s.replace(
+            "{album_artist}",
+            self.album_artist.as_ref().unwrap_or(&String::new()),
+        );
+        s = s.replace("{artist}", self.artist.as_ref().unwrap_or(&String::new()));
+        s = s.replace("{feat}", feat);
+        s = s.replace("{genre}", self.genre.as_ref().unwrap_or(&String::new()));
+        s = s.replace("{remix}", self.remix.as_ref().unwrap_or(&String::new()));
+        s = s.replace("{title}", title.as_ref().unwrap_or(&String::new()));
+        if let Some(track) = &self.track {
+            s = s.replace("{track}", &format!("{}", track));
+        } else {
+            s = s.replace("{track}", "");
+        }
+        if let Some(year) = &self.year {
+            s = s.replace("{year}", &format!("{}", year));
+        } else {
+            s = s.replace("{year}", "");
+        }
+
+        String::from(util::remove_duplicate_whitespace(util::remove_empty_brackets(s)).trim())
+    }
 }
 
-fn print_proposal<T: std::fmt::Display + PartialEq>(name: &str, old: &Option<T>, new: &Option<T>) {
+fn print_proposal<T>(name: &str, old: &Option<T>, new: &Option<T>)
+where
+    T: std::fmt::Display + PartialEq,
+{
     if old.is_none() {
         if new.is_some() {
             println!("  {:<15} N/A\n{:<16}> {}", name, "", new.as_ref().unwrap());
@@ -270,14 +280,14 @@ pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
         }
 
         loop {
-            proposal.update(&old_artist);
+            proposal.update(&config.title_template, &config.filename_template);
             proposal.present(&ftag, &filename);
             let choice =
                 util::confirm_with_options("Accept?", vec![Yes, No, Edit], Yes, &mut reader)?;
             match choice {
                 Edit => proposal.edit(&mut reader)?,
                 Yes => {
-                    proposal.accept(ftag, entry, filename)?;
+                    proposal.accept(ftag, entry)?;
                     break;
                 }
                 _ => break, // No, don't write changes
@@ -289,8 +299,8 @@ pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
 }
 
 /// Separates a string like "Band ft Artist, Musician & Singer"
-/// into a `HashSet` like {"Band", "Artist", "Musician", "Singer"}.
-fn separate_artists(regex: &RegexConfig, s: &str) -> HashSet<String> {
+/// into a vector like ["Band", "Artist", "Musician", "Singer"].
+fn separate_artists(regex: &RegexConfig, s: &str) -> Vec<String> {
     regex
         .artist_separator
         .split(s)
@@ -609,5 +619,23 @@ mod tests {
         check(&r, "Artist 'Title' (Edit)", rmx!("Artist", "Title", "Edit"));
         check(&r, "A ‘Title’ (Feat. B)", song!("A;B", "Title"));
         check(&r, "A - Title (F/C Vibes)", album!("Vibes", "A", "Title"));
+    }
+
+    #[test]
+    fn generates_filename_from_template() {
+        let title_template = String::from("{title} ({feat}) [{remix}]");
+        let filename_template = String::from("{artist} - {title}");
+
+        let inputs = [
+            (TagProposal::default(), "-"),
+            (song!("Artist", "Song"), "Artist - Song"),
+            (song!("A;B;C", "Song"), "A - Song (B & C)"),
+            (rmx!("Artist", "Song", "Remix"), "Artist - Song [Remix]"),
+            (rmx!("A;B", "Song", "Edit"), "A - Song (B) [Edit]"),
+        ];
+        for (mut proposal, expected) in inputs {
+            proposal.update(&title_template, &filename_template);
+            assert_eq!(proposal.filename, expected);
+        }
     }
 }

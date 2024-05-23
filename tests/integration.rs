@@ -137,7 +137,7 @@ fn tag_does_not_fail_without_files() {
 }
 
 #[test]
-fn tag_does_not_fail_with_unsupported_files() {
+fn tag_skips_unsupported_files() {
     let lib = "tw-test-tag-unsupported";
     let lib_path = create_lib(lib);
 

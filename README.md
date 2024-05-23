@@ -90,12 +90,18 @@ This specifies library settings, in newline-separated `name=value` pairs. If thi
 | CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
 | CONFIRM_DOWNLOADS | false | `download` | By default, `download` will simply exit when done, and all downloaded files are kept. If this setting is enabled however, the user will be asked to confirm or delete each downloaded file. E.g. this option comes in useful when downloading from queries, as the results can be different than expected. |
 | DESCRIPTION | | `show` | Description of the library, used for informational purposes |
+| FILENAME_TEMPLATE | `{artist} - {title}` | `tag` | Files will be formatted according to this template. See [Tag format](#tag-format). In this case, the `title` refers to the title as formatted by `TITLE_TEMPLATE`. Note that the extension should not be specified. |
 | INPUT_DIR | | `tag`, `deposit` | The folder where the `tag` and `deposit` commands take their inputs from. If you use the `download` command, you'll generally want yt-dlp to put its downloads into this folder, so they can be processed further. The folder is either a LIBRARY-relative path or an absolute path. **Required** for `tag` and `deposit` commands. |
 | ORGANIZE | | `deposit` | By default `deposit` simply drops files straight in the target folder. With this option, files are organized per one of the modes described below. **Requires** `TARGET_DIR`. |
 | OVERRIDE_ARTIST | false | `tag` | For some sites, such as YouTube, yt-dlp will set the 'artist' tag to the uploader instead of the actual artist (which might not be available in the metadata). If the artist can be parsed from the title, setting this option will allow it to override the (incorrect) artist set by the metadata. Other sites, such as bandcamp and soundcloud, do have the correct 'artist' metadata. This is intended to be used for downloading music from YouTube, where the uploader is not the artist per se. |
 | STEPS | | `process` | A comma-separated list of commands (`process` and `add` excluded). This is a convenience option, see the music library example |
 | TARGET_DIR | | `deposit` | Files are downloaded according to the settings in `yt-dlp.conf`. Set this option to move files to the target folder, **after all processing** is done (e.g. downloading and tagging). Only files are moved, not directories. Files will be overwritten if already present in the target folder. TARGET_DIR expects either a path relative to the library config directory or an absolute path. **Requires** `INPUT_DIR` to be set. |
+| TITLE_TEMPLATE | `{title} ({feat}) [{remix}]` | `tag` | The original title is formatted according to this template. See [Tag format](#tag-format). |
 | VERBOSE | false | any | Show verbose output |
+
+##### Tag format
+
+Tag names are surrounded by `{}` and may consist of uppercase or lowercase letters and _ only. Valid tag names are: album, album_artist, track, title, artist (main artist), feat (remaining artists), remix, year, genre. The actual tag values are substituted in, and any other characters will show up as is. If a tag has no value, nothing will be substituted in. Extra spaces are trimmed and empty brackets are removed.
 
 ##### Organization modes
 

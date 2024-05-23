@@ -168,28 +168,92 @@ pub fn remove_brackets(s: &str) -> String {
     String::from(result.trim())
 }
 
+/// Remove all pairs of matching empty brackets.
+pub fn remove_empty_brackets(s: String) -> String {
+    let mut result = s.clone();
+    for (i, c) in s.chars().enumerate() {
+        for (a, b) in [('(', ')'), ('[', ']'), ('{', '}'), ('<', '>')] {
+            if c == a && s.chars().nth(i + 1) == Some(b) {
+                result = String::from(&s[..i]) + &s[i + 2..];
+                break;
+            }
+        }
+    }
+
+    if result.len() < s.len() {
+        remove_empty_brackets(result)
+    } else {
+        result
+    }
+}
+
+/// Remove all duplicate whitespace.
+pub fn remove_duplicate_whitespace(s: String) -> String {
+    for (i, c) in s.chars().enumerate() {
+        if c == ' ' && s.chars().nth(i + 1) == Some(' ') {
+            return remove_duplicate_whitespace(String::from(&s[..i]) + &s[i + 1..]);
+        }
+    }
+    s
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn removes_brackets() {
-        assert_eq!(remove_brackets("(official video)"), "official video");
-        assert_eq!(remove_brackets("[hard remix]"), "hard remix");
-        assert_eq!(remove_brackets("{instrumental}"), "instrumental");
-        assert_eq!(remove_brackets("<remix>"), "remix");
-        assert_eq!(remove_brackets("( extended mix )"), "extended mix");
+        let inputs = [
+            ("(official video)", "official video"),
+            ("[hard remix]", "hard remix"),
+            ("{instrumental}", "instrumental"),
+            ("<remix>", "remix"),
+            ("( extended mix )", "extended mix"),
+            ("【mix】", "mix"),
+            (" [remix]", "remix"),
+            (" [ remix ]  ", "remix"),
+        ];
+        for (input, expected) in inputs {
+            assert_eq!(remove_brackets(input), expected);
+        }
     }
 
     #[test]
     fn removes_str_from_string() {
-        let input = String::from("Lorem ipsum dolor sic amet.");
-        assert_eq!(
-            remove_str_from_string(input, "dolor"),
-            "Lorem ipsum  sic amet."
-        );
+        let inputs = [
+            ("Official HD Video", "HD", "Official  Video"),
+            ("03. Artist - Song", "03.", "Artist - Song"),
+        ];
+        for (input, to_remove, expected) in inputs {
+            assert_eq!(
+                remove_str_from_string(input.to_string(), to_remove),
+                expected
+            );
+        }
+    }
 
-        let input = String::from("03. Artist - Song");
-        assert_eq!(remove_str_from_string(input, "03."), "Artist - Song");
+    #[test]
+    fn removes_empty_brackets() {
+        let inputs = [
+            ("(", "("),
+            (")", ")"),
+            ("()", ""),
+            ("[]", ""),
+            ("{}", ""),
+            ("<>", ""),
+            ("(<>)[]", ""),
+            ("[(()<{}>)[]((()))]", ""),
+        ];
+        for (input, expected) in inputs {
+            assert_eq!(remove_empty_brackets(input.to_string()), expected);
+        }
+    }
+
+    #[test]
+    fn removes_duplicate_whitespace() {
+        let inputs = [("  ", " "), ("a  b", "a b"), ("a  bc  d", "a bc d")];
+        for (input, expected) in inputs {
+            assert_eq!(remove_duplicate_whitespace(input.to_string()), expected);
+        }
     }
 }

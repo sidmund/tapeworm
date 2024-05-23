@@ -35,6 +35,8 @@ pub struct Config {
 
     // Tag options
     pub override_artist: bool,
+    pub title_template: String,
+    pub filename_template: String,
     pub input_dir: Option<PathBuf>,
 
     // Deposit options
@@ -140,6 +142,7 @@ impl Config {
                     "confirm_downloads" => self.confirm_downloads = value.parse::<bool>()?,
                     // Tag
                     "override_artist" => self.override_artist = value.parse::<bool>()?,
+                    "filename_template" => self.filename_template = String::from(value),
                     // Tag, Deposit
                     "input_dir" => self.input_dir = Some(PathBuf::from(value)),
                     // Deposit
@@ -210,6 +213,8 @@ impl Config {
 
         let mut config = Config {
             command,
+            title_template: String::from("{title} ({feat}) [{remix}]"),
+            filename_template: String::from("{artist} - {title}"),
             ..Default::default()
         };
 
