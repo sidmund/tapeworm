@@ -143,6 +143,7 @@ impl Config {
                     // Tag
                     "override_artist" => self.override_artist = value.parse::<bool>()?,
                     "filename_template" => self.filename_template = String::from(value),
+                    "title_template" => self.title_template = String::from(value),
                     // Tag, Deposit
                     "input_dir" => self.input_dir = Some(PathBuf::from(value)),
                     // Deposit
