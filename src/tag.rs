@@ -93,12 +93,13 @@ impl TagProposal {
         self.filename = self.apply_template(&feat, &self.final_title, filename_template);
     }
 
-    fn present(&self, ftag: &Box<dyn AudioTag + Sync + Send>, old_filename: &String) {
+    fn present(&self, ftag: &Box<dyn AudioTag + Sync + Send>, entry: &PathBuf) {
         let album = self.album.as_ref().map(|s| s.as_str());
         let album_artist = self.album_artist.as_ref().map(|s| s.as_str());
         let artist = self.artist.as_ref().map(|s| s.as_str());
         let genre = self.genre.as_ref().map(|s| s.as_str());
         let title = self.final_title.as_ref().map(|s| s.as_str());
+        let old_filename = entry.file_stem().unwrap().to_owned().into_string().unwrap();
 
         println!("\nProposed changes:");
         print_proposal("ARTIST", &ftag.artist(), &artist);
@@ -108,7 +109,7 @@ impl TagProposal {
         print_proposal("TITLE", &ftag.title(), &title);
         print_proposal("YEAR", &ftag.year(), &self.year);
         print_proposal("GENRE", &ftag.genre(), &genre);
-        print_proposal("FILENAME", &Some(old_filename), &Some(&self.filename));
+        print_proposal("FILENAME", &Some(&old_filename), &Some(&self.filename));
     }
 
     fn edit<R: BufRead>(&mut self, mut reader: R) -> types::UnitResult {
@@ -282,7 +283,7 @@ pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
 
         loop {
             proposal.update(&config.title_template, &config.filename_template);
-            proposal.present(&ftag, &filename);
+            proposal.present(&ftag, entry);
             let choice =
                 util::confirm_with_options("Accept?", vec![Yes, No, Edit], Yes, &mut reader)?;
             match choice {
