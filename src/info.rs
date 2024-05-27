@@ -7,26 +7,28 @@ use std::{fs, path::PathBuf};
 pub fn show(config: &Config) -> types::UnitResult {
     let lib = config.library.clone().unwrap();
     let desc = config.lib_desc.clone().unwrap_or(String::from(""));
-    println!("{}: {}", lib, desc);
+    println!("\n  {}: {}\n", lib, desc);
 
-    if fs::metadata(&config.input_path.clone().unwrap()).is_ok() {
-        println!("  input.txt [OK]");
-    } else {
-        println!("  input.txt [NOT FOUND]");
+    let input_path = config.input_path.clone().unwrap();
+    if fs::metadata(&input_path).is_ok() {
+        print!("  > input.txt : ");
+        let inputs = fs::read_to_string(&input_path)?;
+        if inputs.is_empty() {
+            println!("Nothing to download");
+        } else {
+            println!("{} to download", inputs.lines().count());
+        }
     }
 
     if fs::metadata(&config.lib_conf_path.clone().unwrap()).is_ok() {
-        println!("  lib.conf [OK]");
-    } else {
-        println!("  lib.conf [NOT FOUND]");
+        println!("  > lib.conf");
     }
 
     if fs::metadata(&config.yt_dlp_conf_path.clone().unwrap()).is_ok() {
-        println!("  yt-dlp.conf [OK]");
-    } else {
-        println!("  yt-dlp.conf [NOT FOUND]");
+        println!("  > yt-dlp.conf");
     }
 
+    println!();
     Ok(())
 }
 
