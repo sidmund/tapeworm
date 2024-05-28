@@ -39,16 +39,16 @@ Minimal example setup and usage when you want to use tapeworm for downloading:
 
 ```sh
 # Create the library by recording a query
-tapeworm add LIBRARY song  # records 'ytsearch:song'
-tapeworm add LIBRARY "the artist - a song"  # records 'ytsearch:the artist - a song'
-tapeworm add LIBRARY https://youtube.com/watch?v=123 # records the URL
+tapeworm LIBRARY add song  # records 'ytsearch:song'
+tapeworm LIBRARY add "the artist - a song"  # records 'ytsearch:the artist - a song'
+tapeworm LIBRARY add https://youtube.com/watch?v=123 # records the URL
 
 # Download all URLs/queries
-tapeworm download LIBRARY
+tapeworm LIBRARY download
 
 # Optionally, tag and deposit the downloaded files
-tapeworm tag LIBRARY # extract more tags from "title"
-tapeworm deposit LIBRARY # organize into a target folder
+tapeworm LIBRARY tag # extract more tags from "title"
+tapeworm LIBRARY deposit # organize into a target folder
 ```
 
 If you add a URL from a [scraping supported site](#supported-websites-for-scraping), tapeworm will scrape that page to find song information and add that as a `ytsearch` query to the library.
@@ -58,8 +58,8 @@ Downloading the library will first download each input (whether URL or query), a
 If you want to use tapeworm merely for tagging and/or organizing files, see the following minimal example setup and usage:
 
 ```sh
-tapeworm tag LIBRARY # `INPUT_DIR` should be set, and have some files in it
-tapeworm deposit LIBRARY # Both `INPUT_DIR` and `TARGET_DIR` should be set
+tapeworm LIBRARY tag # `INPUT_DIR` should be set, and have some files in it
+tapeworm LIBRARY deposit # Both `INPUT_DIR` and `TARGET_DIR` should be set
 ```
 
 ### Configuration
@@ -135,13 +135,13 @@ Keep in mind that only files are moved, not subfolders of `INPUT_DIR`. So you ca
 
 #### input.txt
 
-This file is created the first time `tapeworm add LIBRARY URL|TERM...` is issued. Each line is treated as a separate URL or query. Note that `TERM...` is added as a YouTube search query.
+This file is created the first time `tapeworm LIBRARY add URL|TERM...` is issued. Each line is treated as a separate URL or query. Note that `TERM...` is added as a YouTube search query.
 
 Example:
 ```sh
-tapeworm add LIBRARY song  # add a query
-tapeworm add LIBRARY "the artist - a song"  # add a query
-tapeworm add LIBRARY https://youtube.com/watch?v=123  # add a URL
+tapeworm LIBRARY add song  # add a query
+tapeworm LIBRARY add "the artist - a song"  # add a query
+tapeworm LIBRARY add https://youtube.com/watch?v=123  # add a URL
 ```
 The file now contains:
 ```
@@ -175,11 +175,11 @@ echo "CLEAR_INPUT=true" > lib.conf # empty input.txt when done
 echo "-x <etc>" > yt-dlp.conf # add audio extraction and format options
 
 # Add to song/input.txt
-tapeworm add song https://youtube.com/watch?v=123
-tapeworm add song "the artist - a song"
+tapeworm song add https://youtube.com/watch?v=123
+tapeworm song add "the artist - a song"
 
 # Find URLs for each input (if needed) and download all of them as audio
-tapeworm download song
+tapeworm song download
 ```
 
 Setup music library with tagging. The Music folder only contains properly processed (tagged) files, and `LIBRARY/tmp` is used as temporary storage for downloads.
@@ -190,16 +190,16 @@ echo "CLEAR_INPUT=true" >> lib.conf # empty input.txt when done
 echo "INPUT_DIR=tmp" >> lib.conf
 echo "TARGET_DIR=/home/<user_name>/Music" >> lib.conf
 
-tapeworm add music https://youtube.com/watch?v=123
-tapeworm add music "the artist - a song"
+tapeworm music add https://youtube.com/watch?v=123
+tapeworm music add "the artist - a song"
 
-tapeworm download music
-tapeworm tag music
-tapeworm deposit music # to move them into TARGET_DIR
+tapeworm music download
+tapeworm music tag
+tapeworm music deposit # to move them into TARGET_DIR
 
 # Alternative for the above 3 commands
 echo "STEPS=download,tag,deposit" >> lib.conf
-tapeworm process music
+tapeworm music process
 ```
 For tagging to work, the following yt-dlp.conf setup is required:
 ```
@@ -224,7 +224,7 @@ echo "https://www.youtube.com/c/MyGamingChannel/videos" >> input.txt
 # Note that we don't clear the input, as we are reusing it
 # to periodically archive videos from these exact channels
 
-tapeworm download mychannels # call this every once in a while
+tapeworm mychannels download # call this every once in a while
 ```
 
 You can also use tapeworm without the downloading/tagging features, and exploit its filesystem organization capabilities. See this example for a library of pictures, where each picture's filename has to be formatted like `ARTIST - TITLE`, the artist can of course also be a source or event:
@@ -241,7 +241,7 @@ mv ~/Downloads/dog.jpg tmp
 mv "~/Downloads/France holiday 2024 - beach.png" tmp
 
 # Sort the pictures into the target directory
-tapeworm process pics
+tapeworm pics process
 # Pictures are now in:
 # Pictures/A/artist/artist-painting.jpg
 # Pictures/D/dog.jpg

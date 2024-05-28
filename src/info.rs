@@ -53,16 +53,16 @@ tapeworm - A scraper and downloader written in Rust
 COMMANDS
     A command may take options. If it does, the GENERAL OPTIONS also apply.
 
-    help
+    help, h, -h, --help
         Show this help message
 
-    list
+    list, ls, l
         List all libraries
 
-    show LIBRARY
+    LIBRARY
         Show information about the LIBRARY
 
-    add LIBRARY TERM|URL [TERM|URL...]
+    LIBRARY add TERM|URL [TERM|URL...]
         Add TERMs and/or URLs to the LIBRARY. TERMs are added as YouTube search queries.
         A URL is simply added, unless it points to a Spotify playlist.
         In this case, it will be scraped, and the found songs are added as YouTube search queries.
@@ -72,7 +72,7 @@ COMMANDS
 
         NB: if LIBRARY does not exist, it will be created.
 
-    download LIBRARY [OPTIONS]
+    LIBRARY download [OPTIONS]
         Given the inputs in ~/.config/tapeworm/LIBRARY/input.txt,
         scrape any queries and download all (scraped) URLs,
         using the config in ~/.config/tapeworm/LIBRARY/yt-dlp.conf
@@ -80,13 +80,13 @@ COMMANDS
         OPTIONS
         -c      Clear the input file after scraping
 
-    tag LIBRARY [OPTIONS]
+    LIBRARY tag [OPTIONS]
         Tag all downloaded files in the directory specified by INPUT_DIR
 
         OPTIONS
         -i      Set the INPUT_DIR, required if not set in lib.conf
 
-    deposit LIBRARY [OPTIONS]
+    LIBRARY deposit [OPTIONS]
         Move downloaded files to the directory specified by TARGET_DIR
 
         OPTIONS
@@ -101,7 +101,7 @@ COMMANDS
         -o
             Set the TARGET_DIR (output directory), requires -i
 
-    process LIBRARY [OPTIONS]
+    LIBRARY process [OPTIONS]
         Process LIBRARY as specified by `STEPS`. Any options from `download`, `tag`, `deposit` are valid here
 
         OPTIONS
@@ -116,17 +116,17 @@ GENERAL OPTIONS
 
 EXAMPLE
     # Create the library by recording a query
-    tapeworm add LIBRARY song  # records 'ytsearch:song'
-    tapeworm add LIBRARY \"the artist - a song\"  # records 'ytsearch:the artist - a song'
-    tapeworm add LIBRARY https://youtube.com/watch?v=123
+    tapeworm LIBRARY add song  # records 'ytsearch:song'
+    tapeworm LIBRARY add \"the artist - a song\"  # records 'ytsearch:the artist - a song'
+    tapeworm LIBRARY add https://youtube.com/watch?v=123
 
     # Download, tag, and organize all
-    tapeworm download LIBRARY
-    tapeworm tag LIBRARY
-    tapeworm deposit LIBRARY -d A-Z
+    tapeworm LIBRARY download
+    tapeworm LIBRARY tag
+    tapeworm LIBRARY deposit -d A-Z
 
     # Alternatively, using process steps
-    tapeworm process LIBRARY -s download,tag,deposit -d A-Z
+    tapeworm LIBRARY process -s download,tag,deposit -d A-Z
 "
     );
 }

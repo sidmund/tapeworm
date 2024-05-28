@@ -5,17 +5,19 @@ use common::*;
 use std::{fs, io::BufReader, path::PathBuf};
 
 #[test]
-fn fails_without_command() {
-    assert!(setup(vec![]).is_err());
+fn runs_without_command_or_library() {
+    run(setup(vec![]).unwrap()).unwrap();
 }
 
 #[test]
-fn shows_list() {
-    run(setup(vec!["list"]).unwrap()).unwrap();
+fn runs_non_library_commands() {
+    for cmd in ["help", "h", "-h", "--help", "list", "ls", "l"] {
+        run(setup(vec![cmd]).unwrap()).unwrap();
+    }
 }
 
 #[test]
-fn fails_without_library() {
+fn library_commands_fail_without_library() {
     for cmd in ["show", "add", "download", "tag", "deposit", "process"] {
         assert!(setup(vec![cmd]).is_err());
     }
@@ -25,7 +27,7 @@ fn fails_without_library() {
 fn fails_with_non_existing_library() {
     for cmd in ["show", "download", "tag", "deposit", "process"] {
         let lib = format!("tw-test-{}-unexist", cmd);
-        assert!(setup(vec![cmd, &lib]).is_err());
+        assert!(setup(vec![&lib, cmd]).is_err());
     }
 }
 
@@ -38,7 +40,8 @@ fn add_fails_without_args() {
 fn shows_library() {
     let lib = "tw-test-show";
     let lib_path = create_lib(lib);
-    run(setup(vec!["show", lib]).unwrap()).unwrap();
+    run(setup(vec![lib]).unwrap()).unwrap();
+    run(setup(vec![lib, "show"]).unwrap()).unwrap();
     destroy(lib_path);
 }
 
@@ -46,11 +49,11 @@ fn shows_library() {
 fn adds_to_library() {
     let lib = "tw-test-add";
     let url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-    let config = setup(vec!["add", lib, url]).unwrap();
+    let config = setup(vec![lib, "add", url]).unwrap();
     let lib_path = config.lib_path.clone().unwrap();
     let input_path = config.input_path.clone().unwrap();
     run(config).unwrap();
-    run(setup(vec!["add", lib, "Darude Sandstorm"]).unwrap()).unwrap();
+    run(setup(vec![lib, "add", "Darude Sandstorm"]).unwrap()).unwrap();
 
     assert_eq!(
         format!("{}\nytsearch:Darude Sandstorm\n", url),
@@ -71,13 +74,13 @@ fn download(lib: &str, clear_input: bool) {
     write(lib_path.join("yt-dlp.conf"), options);
 
     // Add a query
-    run(setup(vec!["add", lib, "Darude Sandstorm"]).unwrap()).unwrap();
+    run(setup(vec![lib, "add", "Darude Sandstorm"]).unwrap()).unwrap();
 
     // Wait for download
     let config = if clear_input {
-        setup(vec!["download", lib, "-c"]).unwrap()
+        setup(vec![lib, "download", "-c"]).unwrap()
     } else {
-        setup(vec!["download", lib]).unwrap()
+        setup(vec![lib, "download"]).unwrap()
     };
     let lib_path = config.lib_path.clone().unwrap();
     let input_path = config.input_path.clone().unwrap();
@@ -122,9 +125,9 @@ fn downloads_and_clears_input() {
 fn fails_tag_on_incorrect_args() {
     let lib = "tw-test-tag-fail";
     let lib_path = create_lib(lib);
-    assert!(run(setup(vec!["tag", lib]).unwrap()).is_err());
-    assert!(run(setup(vec!["tag", lib, "-i"]).unwrap()).is_err());
-    assert!(run(setup(vec!["tag", lib, "-i", "tw-test-uy4hfaif"]).unwrap()).is_err());
+    assert!(run(setup(vec![lib, "tag"]).unwrap()).is_err());
+    assert!(run(setup(vec![lib, "tag", "-i"]).unwrap()).is_err());
+    assert!(run(setup(vec![lib, "tag", "-i", "tw-test-uy4hfaif"]).unwrap()).is_err());
     destroy(lib_path);
 }
 
@@ -132,7 +135,7 @@ fn fails_tag_on_incorrect_args() {
 fn tag_does_not_fail_without_files() {
     let lib = "tw-test-tag-no-files";
     let lib_path = create_lib(lib);
-    run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
+    run(setup(vec![lib, "tag", "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
     destroy(lib_path);
 }
 
@@ -151,7 +154,7 @@ fn tag_skips_unsupported_files() {
         copy(file, &lib_path);
     }
 
-    run(setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
+    run(setup(vec![lib, "tag", "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
 
     destroy(lib_path);
 }
@@ -173,7 +176,7 @@ fn tag(ext: &str) {
 
     let buffer = Vec::from(b"y\n");
     let reader: BufReader<&[u8]> = BufReader::new(buffer.as_ref());
-    let config = setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap();
+    let config = setup(vec![lib, "tag", "-i", lib_path.to_str().unwrap()]).unwrap();
     run_with(config, reader).unwrap();
 
     assert!(fs::metadata(lib_path.join(&file)).is_err());
@@ -206,7 +209,7 @@ fn cancel_tagging_preserves_file() {
 
     let buffer = Vec::from(b"n\n");
     let reader: BufReader<&[u8]> = BufReader::new(buffer.as_ref());
-    let config = setup(vec!["tag", lib, "-i", lib_path.to_str().unwrap()]).unwrap();
+    let config = setup(vec![lib, "tag", "-i", lib_path.to_str().unwrap()]).unwrap();
     run_with(config, reader).unwrap();
 
     assert!(fs::metadata(lib_path.join("Artist - Song [Radio Edit].mp3")).is_err());
@@ -235,7 +238,7 @@ fn fails_deposit_on_incorrect_args() {
     for i in i_opts {
         for o in o_opts {
             for d in d_opts {
-                let mut args = vec!["deposit", lib];
+                let mut args = vec![lib, "deposit"];
                 // TODO also shuffle their order (6 different ways)
                 if let Some(i) = i {
                     args.push("-i");
@@ -297,9 +300,9 @@ fn deposit(lib: &str, mode: &str, filename: &str, az_path: &PathBuf, date_path: 
     let i = lib_in.to_str().unwrap();
     let o = lib_out.to_str().unwrap();
     let opts = match mode {
-        "A-Z" => vec!["deposit", lib, "-i", i, "-o", o, "-d", "A-Z"],
-        "DATE" => vec!["deposit", lib, "-i", i, "-o", o, "-d", "DATE"],
-        _ => vec!["deposit", lib, "-i", i, "-o", o],
+        "A-Z" => vec![lib, "deposit", "-i", i, "-o", o, "-d", "A-Z"],
+        "DATE" => vec![lib, "deposit", "-i", i, "-o", o, "-d", "DATE"],
+        _ => vec![lib, "deposit", "-i", i, "-o", o],
     };
     run(setup(opts).unwrap()).unwrap();
 
@@ -355,7 +358,7 @@ fn deposits() {
 fn fails_to_process_without_steps() {
     let lib = "tw-test-no-steps";
     let lib_path = create_lib(lib);
-    assert!(run(setup(vec!["process", lib]).unwrap()).is_err());
+    assert!(run(setup(vec![lib, "process"]).unwrap()).is_err());
     destroy(lib_path);
 }
 
@@ -363,8 +366,8 @@ fn fails_to_process_without_steps() {
 fn fails_to_process_illegal_commands() {
     let lib = "tw-test-illegal";
     let lib_path = create_lib(lib);
-    assert!(run(setup(vec!["process", lib, "-s", "add"]).unwrap()).is_err());
-    assert!(run(setup(vec!["process", lib, "-s", "process"]).unwrap()).is_err());
-    assert!(run(setup(vec!["process", lib, "-s", "list,process"]).unwrap()).is_err());
+    assert!(run(setup(vec![lib, "process", "-s", "add"]).unwrap()).is_err());
+    assert!(run(setup(vec![lib, "process", "-s", "process"]).unwrap()).is_err());
+    assert!(run(setup(vec![lib, "process", "-s", "list,process"]).unwrap()).is_err());
     destroy(lib_path);
 }

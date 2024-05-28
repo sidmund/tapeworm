@@ -11,7 +11,6 @@ mod util;
 use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
-use std::process;
 
 #[derive(Debug, Default)]
 pub struct Config {
@@ -52,29 +51,31 @@ pub struct Config {
 }
 
 impl Config {
-    fn parse_command(command: Option<String>) -> types::StringResult {
-        if let Some(command) = command {
-            match command.as_str() {
-                "help" | "h" | "-h" | "--help" => {
-                    info::help();
-                    process::exit(0);
-                }
-                _ => Ok(command),
-            }
-        } else {
-            Err("Command not specified. See 'help'".into())
+    fn parse_library_and_command(
+        &mut self,
+        args: &mut impl Iterator<Item = String>,
+    ) -> types::UnitResult {
+        let arg = args.next();
+        if arg.is_none() {
+            return Ok(()); // 'help' is default
         }
+
+        let arg = arg.unwrap();
+        match arg.as_str() {
+            "help" | "h" | "-h" | "--help" => return Ok(()), // 'help' is default
+            "list" | "ls" | "l" => self.command = String::from("list"),
+            _ => {
+                self.command = args.next().unwrap_or(String::from("show"));
+                self.setup_library(arg)?;
+            }
+        }
+
+        Ok(())
     }
 
-    /// Set up the library paths. If building for a command that is not "add",
+    /// Set up the library and its configuration paths. If building for a command that is not "add",
     /// this will error if the library does not exist.
-    fn parse_library(&mut self, library: Option<String>) -> types::UnitResult {
-        if library.is_none() {
-            return Err("Library not specified. See 'help'".into());
-        }
-
-        let library = library.unwrap();
-
+    fn setup_library(&mut self, library: String) -> types::UnitResult {
         let lib_path = PathBuf::from(dirs::config_dir().unwrap())
             .join("tapeworm")
             .join(library.clone());
@@ -210,21 +211,13 @@ impl Config {
     pub fn build(mut args: impl Iterator<Item = String>) -> types::ConfigResult {
         args.next(); // Consume program name
 
-        let command = Config::parse_command(args.next())?;
-
         let mut config = Config {
-            command,
+            command: String::from("help"),
             title_template: String::from("{title} ({feat}) [{remix}]"),
             filename_template: String::from("{artist} - {title}"),
             ..Default::default()
         };
-
-        // Commands that require a library
-        if ["show", "add", "download", "tag", "deposit", "process"]
-            .contains(&config.command.as_str())
-        {
-            config.parse_library(args.next())?;
-        }
+        config.parse_library_and_command(&mut args)?;
 
         // Parse extra options for commands that have them
         if config.command == "add" {
@@ -267,6 +260,7 @@ impl Config {
 pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
     for command in &config.steps()? {
         match command.as_str() {
+            "help" => info::help(),
             "list" => info::list()?,
             "show" => info::show(&config)?,
             "add" => add::run(&config)?,
