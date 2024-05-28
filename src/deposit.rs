@@ -8,6 +8,8 @@ use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
 
+type BuildTargetFunction = fn(&PathBuf, &PathBuf) -> types::PathBufResult;
+
 #[derive(Debug, PartialEq)]
 pub enum DepositMode {
     /// Sort files into `A-Z/ARTIST?/ALBUM?` subfolders
@@ -34,7 +36,7 @@ impl DepositMode {
         }
     }
 
-    fn func(&self) -> fn(&PathBuf, &PathBuf) -> Result<PathBuf, String> {
+    fn func(&self) -> BuildTargetFunction {
         match self {
             Self::AZ => alphabetical,
             Self::Date => chronological,
@@ -43,12 +45,9 @@ impl DepositMode {
     }
 }
 
-/// Attempt to move all downloaded (and processed) files in INPUT_DIR to TARGET_DIR. TARGET_DIR is
-/// created if not present. Only files are moved, not folders. If a file already exists in
-/// TARGET_DIR, it will be overwritten upon user confirmation.
-///
-/// If ORGANIZE is specified, files will be moved to organized subdirectories of TARGET_DIR,
-/// according to the organization mode.
+/// Attempt to move all (downloaded and processed) files (not directories) in `INPUT_DIR` to
+/// `TARGET_DIR`. If the target folder does not exist, it is created. If a file already exists in
+/// the target folder, it will be overwritten upon user confirmation.
 pub fn run<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
     if config.target_dir.is_none() {
         return Err("'TARGET_DIR' required for moving downloads. See 'help'".into());
@@ -58,14 +57,12 @@ pub fn run<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
 
     let lib_path = config.lib_path.clone().unwrap();
 
-    let downloads = lib_path.join(config.input_dir.clone().unwrap());
-    let downloads: Vec<PathBuf> = util::filepaths_in(downloads)?;
+    let downloads = util::filepaths_in(lib_path.join(config.input_dir.clone().unwrap()))?;
     if downloads.is_empty() {
         return Ok(());
     }
 
-    let target_dir = lib_path.join(config.target_dir.clone().unwrap());
-    let target_dir = util::guarantee_dir_path(target_dir)?;
+    let target_dir = util::guarantee_dir_path(lib_path.join(config.target_dir.clone().unwrap()))?;
 
     if let Some(errors) = deposit(target_dir, downloads, config.organize.func(), reader) {
         return Err(format!(
@@ -87,7 +84,7 @@ pub fn run<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
 /// Examples:
 /// - `randomfile.jpg` created at 2024-04-29    -> `target_dir/2024/04/randomfile.jpg`
 /// - `Artist - Song.mp3` created at 2024-05-15 -> `target_dir/2024/05/Artist - Song.mp3`
-fn chronological(target_dir: &PathBuf, file: &PathBuf) -> Result<PathBuf, String> {
+fn chronological(target_dir: &PathBuf, file: &PathBuf) -> types::PathBufResult {
     let filename = file.file_name().unwrap().to_owned().into_string().unwrap();
 
     let target = if let Ok(meta) = fs::metadata(&file) {
@@ -97,23 +94,13 @@ fn chronological(target_dir: &PathBuf, file: &PathBuf) -> Result<PathBuf, String
                 .join(created.year().to_string())
                 .join(format!("{:02}", created.month()))
         } else {
-            return Err(String::from("! Unsupported platform: can't get file date"));
+            return Err("! Unsupported platform: can't get file date".into());
         }
     } else {
-        return Err(format!("! Invalid path or no permission: {}", filename));
+        return Err(format!("! Invalid path or no permission: {}", filename).into());
     };
 
-    let target_path = target.clone();
-    let target = util::guarantee_dir_path(target);
-    if let Err(e) = target {
-        Err(format!(
-            "! Could not create target dir: {}\n    {}",
-            target_path.display(),
-            e
-        ))
-    } else {
-        Ok(target.unwrap().join(filename))
-    }
+    Ok(util::guarantee_dir_path(target)?.join(filename))
 }
 
 /// Sort the `file` into an alphabetical subfolder of `target_dir`:
@@ -129,12 +116,11 @@ fn chronological(target_dir: &PathBuf, file: &PathBuf) -> Result<PathBuf, String
 /// - `Band - Song.mp3 with artist tag 'Band'` -> `target_dir/B/Band/Band - Song.mp3`
 /// - `Band - Song.mp3 without artist tag`     -> `target_dir/B/Band/Band - Song.mp3`
 /// - `Band - Song.mp3 with artist, album tag` -> `target_dir/B/Band/Album/Band - Song.mp3`
-fn alphabetical(target_dir: &PathBuf, file: &PathBuf) -> Result<PathBuf, String> {
+fn alphabetical(target_dir: &PathBuf, file: &PathBuf) -> types::PathBufResult {
     let filename = file.file_name().unwrap().to_owned().into_string().unwrap();
     let tag = Tag::new().read_from_path(&file);
 
     let mut target = None;
-
     if let Ok(tag) = &tag {
         // Attempt to get the ARTIST from tag
         if let Some(artist) = tag.artist() {
@@ -162,29 +148,18 @@ fn alphabetical(target_dir: &PathBuf, file: &PathBuf) -> Result<PathBuf, String>
         target = Some(target_dir.join(letter_for(&filename)));
     }
 
-    let target_path = target.clone().unwrap();
-    let target = util::guarantee_dir_path(target.unwrap());
-    if target.is_err() {
-        Err(format!(
-            "! Could not create target dir: {}\n    {}",
-            target_path.display(),
-            target.unwrap_err()
-        ))
-    } else {
-        Ok(target.unwrap().join(filename))
-    }
+    Ok(util::guarantee_dir_path(target.unwrap())?.join(filename))
 }
 
 /// Drop the `file` file directly in `target_dir`.
-fn drop(target_dir: &PathBuf, file: &PathBuf) -> Result<PathBuf, String> {
-    let filename = file.file_name().unwrap().to_owned().into_string().unwrap();
-    Ok(target_dir.join(filename))
+fn drop(target_dir: &PathBuf, file: &PathBuf) -> types::PathBufResult {
+    Ok(target_dir.join(file.file_name().unwrap().to_owned().into_string().unwrap()))
 }
 
 fn deposit<R: BufRead>(
     target_dir: PathBuf,
     downloads: Vec<PathBuf>,
-    func: fn(&PathBuf, &PathBuf) -> Result<PathBuf, String>,
+    func: BuildTargetFunction,
     mut reader: R,
 ) -> types::OptionVecString {
     println!("Moving files to {}...", target_dir.display());
@@ -196,7 +171,11 @@ fn deposit<R: BufRead>(
 
         let target = func(&target_dir, &entry);
         if let Err(e) = target {
-            errors.push(e);
+            errors.push(format!(
+                "! Could not create target dir: {}\n    {}",
+                target_dir.display(),
+                e
+            ));
             continue;
         }
         let target = target.unwrap();
@@ -206,8 +185,10 @@ fn deposit<R: BufRead>(
             continue;
         }
 
-        if let Some(error) = rename(entry, target) {
-            errors.push(error);
+        if fs::rename(&entry, &target).is_ok() {
+            println!("  {}\n> {}", entry.display(), target.display());
+        } else {
+            errors.push(format!("! {}\n> {}", entry.display(), target.display()));
         }
     }
 
@@ -215,20 +196,6 @@ fn deposit<R: BufRead>(
         None
     } else {
         Some(errors)
-    }
-}
-
-/// Attempt to rename (move) the `entry` file to `target` file.
-///
-/// # Returns
-/// - `None` when successful
-/// - `Some(String)` with a file error message
-fn rename(entry: PathBuf, target: PathBuf) -> Option<String> {
-    if fs::rename(entry.clone(), target.clone()).is_err() {
-        Some(format!("! {}\n> {}", entry.display(), target.display()))
-    } else {
-        println!("  {}\n> {}", entry.display(), target.display());
-        None
     }
 }
 
