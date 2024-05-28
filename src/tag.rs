@@ -39,7 +39,7 @@ impl TagExtractor {
         (?<year>\(\d{4}\)|\d{4}) |
         (?<remix>[\[(][^\[\]()]*(cut|edit|extend(ed)?(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\]()]*[\])]) |
         (?<album>[\[\(【][^\[\]\(\)【】]*(?<album_rmv>F\WC)[^\[\]\(\)【】]*[\]\)】]) |
-        (?<strip>[\[(][^\[\]()]*(full\sversion|(official\s)?((music\s)?video|audio)|m/?v|hq|hd)[^\[\]()]*[\])])
+        (?<strip>lyrics|[\[(][^\[\]()]*(lyrics|full\sversion|(official\s)?((music\s)?video|audio)|m/?v|hq|hd)[^\[\]()]*[\])])
         ",
             ).unwrap(),
             verbose,
