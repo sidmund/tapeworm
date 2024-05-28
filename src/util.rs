@@ -97,18 +97,25 @@ pub fn select<R: BufRead>(
     }
 }
 
-/// Append the `contents` to the file at `path`.
-pub fn append<P: AsRef<Path>>(path: P, contents: String) -> types::UnitResult {
+/// # Parameters
+/// - `path`: the path to the file
+/// - `content`: the content to append to the file
+pub fn append<P: AsRef<Path>>(path: P, content: String) -> types::UnitResult {
     fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)?
-        .write_all(contents.as_bytes())?;
+        .write_all(content.as_bytes())?;
     Ok(())
 }
 
-/// If the path `dir` does not exist, it is created.
-/// Returns ownership of `dir`, guaranteed to be an existing directory.
+/// Create the directory if it does not exist.
+///
+/// # Parameters
+/// - `dir`: the path to the directory
+///
+/// # Returns
+/// `dir`, guaranteed to exist
 pub fn guarantee_dir_path(dir: PathBuf) -> types::PathBufResult {
     if fs::metadata(&dir).is_err() {
         fs::create_dir_all(&dir)?;
