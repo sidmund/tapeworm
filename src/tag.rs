@@ -287,15 +287,13 @@ pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
         loop {
             proposal.update(&config.title_template, &config.filename_template);
             proposal.present(&ftag, entry);
-            let choice =
-                util::confirm_with_options("Accept?", vec![Yes, No, Edit], Yes, &mut reader)?;
-            match choice {
-                Edit => proposal.edit(&mut reader)?,
-                Yes => {
+            match util::select("Accept?", vec![Yes, No, Edit], Yes, &mut reader) {
+                Ok(Edit) => proposal.edit(&mut reader)?,
+                Ok(Yes) => {
                     proposal.accept(ftag, entry)?;
                     break;
                 }
-                _ => break, // No, don't write changes
+                _ => break, // Don't write changes on Err(_) or Ok(No)
             }
         }
     }

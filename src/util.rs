@@ -13,6 +13,7 @@ pub enum PromptOption {
     Yes,
     YesToAll,
 }
+
 impl std::fmt::Display for PromptOption {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -23,6 +24,7 @@ impl std::fmt::Display for PromptOption {
         }
     }
 }
+
 impl PromptOption {
     fn info(&self) -> String {
         match self {
@@ -34,8 +36,13 @@ impl PromptOption {
     }
 }
 
-/// Read a line from stdin.
-/// The line is trimmed and optionally converted to lowercase.
+/// Read a line of user input.
+///
+/// # Parameters
+/// - `lowercase`: whether to convert the input to lowercase
+///
+/// # Returns
+/// `String` with leading and trailing whitespace removed
 pub fn input<R: BufRead>(mut reader: R, lowercase: bool) -> types::StringResult {
     let mut input = String::new();
     reader.read_line(&mut input)?;
@@ -46,29 +53,19 @@ pub fn input<R: BufRead>(mut reader: R, lowercase: bool) -> types::StringResult 
     }
 }
 
-/// Prompt the user for confirmation.
+/// Prompt the user to select an option.
 ///
 /// # Returns
-/// - `default` when the user presses 'Enter'
-/// - `true` if the user enters "y"
-/// - `false` if the user enters anything else
-pub fn confirm<R: BufRead>(prompt: &str, default: bool, reader: R) -> types::BoolResult {
-    println!("{} {}", prompt, if default { "Y/n" } else { "y/N" });
-    let input = input(reader, true)?;
-    if input.is_empty() {
-        Ok(default)
-    } else {
-        Ok(input.starts_with('y'))
-    }
-}
-
-pub fn confirm_with_options<R: BufRead>(
+/// `PromptOption`: the selected option, `default` if the user pressed 'Enter'
+pub fn select<R: BufRead>(
     prompt: &str,
     options: Vec<PromptOption>,
     default: PromptOption,
     mut reader: R,
 ) -> types::PromptOptionResult {
-    assert!(!options.is_empty());
+    if options.is_empty() {
+        return Err("Must specify at least one option".into());
+    }
 
     let mut question = String::from(prompt);
     question.push(' ');
@@ -94,7 +91,7 @@ pub fn confirm_with_options<R: BufRead>(
         Some('a') if options.contains(&PromptOption::YesToAll) => Ok(PromptOption::YesToAll),
         Some(_) => {
             println!("Invalid option. Please try again");
-            confirm_with_options(prompt, options, default, reader)
+            select(prompt, options, default, reader)
         }
         None => Ok(default),
     }

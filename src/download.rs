@@ -16,10 +16,10 @@ pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
 If you continue, yt-dlp will be invoked without any options, which will yield inconsistent results.",
             yt_dlp_conf_path.unwrap().to_str().unwrap()
         );
-        if !util::confirm("Do you want to continue regardless?", false, &mut reader)? {
-            return Ok(()); // User wants to abort when config is not found
+        match util::select("Continue anyway?", vec![Yes, No], No, &mut reader) {
+            Ok(Yes) => yt_dlp_conf_path = None,
+            _ => return Ok(()), // User wants to abort when config is not found
         }
-        yt_dlp_conf_path = None;
     }
 
     let input_path = config.input_path.clone().unwrap();
@@ -94,19 +94,14 @@ fn confirm_downloads<R: BufRead>(config: &Config, mut reader: R) -> types::UnitR
 
     for (i, entry) in downloads.iter().enumerate() {
         println!("\nFile {} of {}: {}", i + 1, total, entry.to_str().unwrap());
-        let choice = util::confirm_with_options(
-            "Keep this?",
-            vec![Yes, No, YesToAll],
-            YesToAll,
-            &mut reader,
-        )?;
+        let choice = util::select("Keep?", vec![Yes, No, YesToAll], YesToAll, &mut reader);
         match choice {
-            No => {
+            Ok(No) => {
                 fs::remove_file(entry)?;
                 println!("Deleted {}", entry.to_str().unwrap());
             }
-            YesToAll => break,
-            _ => continue, // Yes
+            Ok(Yes) => continue,
+            _ => break, // Keep all on Err(_) or Ok(YesToAll)
         }
     }
 

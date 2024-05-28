@@ -1,5 +1,6 @@
 //! Move (downloaded and/or tagged) files to a target directory.
 
+use crate::util::PromptOption::{No, Yes};
 use crate::{types, util, Config};
 use audiotags::Tag;
 use chrono::{DateTime, Datelike, Utc};
@@ -217,19 +218,22 @@ fn letter_for(s: &str) -> String {
 
 /// Checks if a file already exists at the `target` location,
 /// and asks the user whether to overwrite it.
-/// Returns true to overwrite, false otherwise.
+///
+/// # Returns
+/// - `true` when the file does not exist, or to overwrite it if it does
+/// - `false` when the file exists and the user does not want to overwrite it
 fn overwrite<R: BufRead>(target: &PathBuf, reader: R) -> bool {
-    if fs::metadata(target).is_ok() {
-        let prompt = format!(
-            "! File already exists: {}\nOverwrite?",
-            target.to_str().unwrap()
-        );
-        let overwrite = util::confirm(&prompt, true, reader);
-        if overwrite.is_err() || !overwrite.unwrap() {
-            return false;
-        }
+    if fs::metadata(target).is_err() {
+        return true;
     }
-    true
+    let prompt = format!(
+        "! File already exists: {}\nOverwrite?",
+        target.to_str().unwrap()
+    );
+    match util::select(&prompt, vec![Yes, No], Yes, reader) {
+        Ok(Yes) => true,
+        _ => false, // Don't overwrite on Err(_) or Ok(No)
+    }
 }
 
 #[cfg(test)]
