@@ -94,6 +94,8 @@ COMMANDS
             Requires -o. Deposit files into an organized manner into the TARGET_DIR.
             MODE is one of the following:
             - \"A-Z\": Sort into alphabetic subfolders, and possibly ARTIST and ALBUM subfolders
+            - \"DATE\": Sort into YYYY/MM subfolders
+            - \"DROP\": Drop files directly in TARGET_DIR
 
         -i
             Set the INPUT_DIR, required if not set in lib.conf

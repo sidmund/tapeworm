@@ -8,6 +8,41 @@ use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
 
+#[derive(Debug, PartialEq)]
+pub enum DepositMode {
+    /// Sort files into `A-Z/ARTIST?/ALBUM?` subfolders
+    AZ,
+    /// Sort files into `YYYY/MM` subfolders
+    Date,
+    /// Drop files directly in `target_dir`
+    Drop,
+}
+
+impl Default for DepositMode {
+    fn default() -> Self {
+        Self::Drop
+    }
+}
+
+impl DepositMode {
+    pub fn from(s: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        match s {
+            "A-Z" => Ok(Self::AZ),
+            "DATE" => Ok(Self::Date),
+            "DROP" => Ok(Self::Drop),
+            _ => Err(format!("Invalid organization mode: '{}'. See 'help'", s).into()),
+        }
+    }
+
+    fn func(&self) -> fn(&PathBuf, &PathBuf) -> Result<PathBuf, String> {
+        match self {
+            Self::AZ => alphabetical,
+            Self::Date => chronological,
+            Self::Drop => drop,
+        }
+    }
+}
+
 /// Attempt to move all downloaded (and processed) files in INPUT_DIR to TARGET_DIR. TARGET_DIR is
 /// created if not present. Only files are moved, not folders. If a file already exists in
 /// TARGET_DIR, it will be overwritten upon user confirmation.
@@ -21,16 +56,6 @@ pub fn run<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
         return Err("'INPUT_DIR' required for moving downloads to 'TARGET_DIR'. See 'help'".into());
     }
 
-    let func = if let Some(mode) = &config.organize {
-        match mode.as_str() {
-            "A-Z" => alphabetical,
-            "DATE" => chronological,
-            _ => return Err(format!("Invalid organization mode: '{}'. See 'help'", mode).into()),
-        }
-    } else {
-        drop
-    };
-
     let lib_path = config.lib_path.clone().unwrap();
 
     let downloads = lib_path.join(config.input_dir.clone().unwrap());
@@ -42,7 +67,7 @@ pub fn run<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
     let target_dir = lib_path.join(config.target_dir.clone().unwrap());
     let target_dir = util::guarantee_dir_path(target_dir)?;
 
-    if let Some(errors) = deposit(target_dir, downloads, func, reader) {
+    if let Some(errors) = deposit(target_dir, downloads, config.organize.func(), reader) {
         return Err(format!(
             "Could not move {} files to target directory:{}",
             errors.len(),

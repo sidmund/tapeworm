@@ -267,11 +267,8 @@ fn fails_deposit_on_incorrect_args() {
                     if config.input_dir.as_ref().is_some_and(|s| s == &lib_path)
                         && config.target_dir.as_ref().is_some()
                     {
-                        let org = config.organize.as_ref();
-                        if org.is_none() || org.unwrap() == "A-Z" {
-                            run(config).unwrap();
-                            continue;
-                        }
+                        run(config).unwrap();
+                        continue;
                     }
                     assert!(run(config).is_err());
                 } else {

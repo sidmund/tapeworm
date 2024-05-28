@@ -105,7 +105,7 @@ Tag names are surrounded by `{}` and may consist of uppercase or lowercase lette
 
 ##### Organization modes
 
-Without specifying `ORGANIZE`, files are moved as follows:
+Without specifying `ORGANIZE` (or specifying `ORGANIZE=DROP`), files are moved as follows:
 ```
 TARGET_DIR/99.mp3
 TARGET_DIR/Artist - Painting.png

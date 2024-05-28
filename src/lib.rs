@@ -8,6 +8,7 @@ mod tag;
 mod types;
 mod util;
 
+use crate::deposit::DepositMode;
 use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
@@ -39,11 +40,7 @@ pub struct Config {
     pub input_dir: Option<PathBuf>,
 
     // Deposit options
-    /// If `None`, will cause `deposit` to simply drop files in the `target_dir`.
-    /// Otherwise, it will be organized into the `target_dir` per below:
-    /// - "A-Z": Sort into `A-Z/ARTIST?/ALBUM?` subfolders
-    /// - "DATE": Sort into `YYYY/MM` subfolders
-    pub organize: Option<String>,
+    pub organize: DepositMode,
     pub target_dir: Option<PathBuf>,
 
     // Process options
@@ -152,7 +149,7 @@ impl Config {
                 "input_dir" => self.input_dir = Some(PathBuf::from(value)),
                 // Deposit
                 "target_dir" => self.target_dir = Some(PathBuf::from(value)),
-                "organize" => self.organize = Some(String::from(value)),
+                "organize" => self.organize = DepositMode::from(value)?,
                 // Process
                 "steps" => self.steps = Some(value.split(',').map(String::from).collect()),
                 _ => return Err(format!("Invalid config option: {}", key).into()),
@@ -176,30 +173,34 @@ impl Config {
                 match c {
                     'v' => self.verbose = true,
                     'c' if self.command == "download" || self.command == "process" => {
-                        self.clear_input = true
+                        self.clear_input = true;
                     }
                     'i' if self.command == "tag"
                         || self.command == "deposit"
                         || self.command == "process" =>
                     {
-                        self.input_dir = args.next().map(PathBuf::from)
+                        self.input_dir = args.next().map(PathBuf::from);
                     }
                     'd' if self.command == "deposit" || self.command == "process" => {
-                        self.organize = args.next()
+                        if let Some(mode) = args.next() {
+                            self.organize = DepositMode::from(mode.as_str())?;
+                        } else {
+                            return Err("Organization mode not specified. See 'help'".into());
+                        }
                     }
                     'o' if self.command == "deposit" || self.command == "process" => {
-                        self.target_dir = args.next().map(PathBuf::from)
+                        self.target_dir = args.next().map(PathBuf::from);
                     }
                     's' if self.command == "process" => {
                         self.steps =
-                            Some(args.next().unwrap().split(',').map(String::from).collect())
+                            Some(args.next().unwrap().split(',').map(String::from).collect());
                     }
                     _ => {
                         return Err(format!(
                             "Unrecognized option '{}' for command '{}'. See 'help'",
                             c, self.command
                         )
-                        .into())
+                        .into());
                     }
                 }
             }
