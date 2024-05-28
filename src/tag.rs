@@ -4,6 +4,7 @@ use crate::util::PromptOption::{Edit, No, Yes};
 use crate::{editor, types, util, Config};
 use audiotags::{AudioTag, Tag};
 use regex::Regex;
+use sanitize_filename;
 use std::collections::HashMap;
 use std::{fs, io::BufRead, path::PathBuf};
 
@@ -90,7 +91,9 @@ impl TagProposal {
         }
 
         self.final_title = Some(self.apply_template(&feat, &self.title, title_template));
-        self.filename = self.apply_template(&feat, &self.final_title, filename_template);
+
+        let filename = self.apply_template(&feat, &self.final_title, filename_template);
+        self.filename = sanitize_filename::sanitize(filename);
     }
 
     fn present(&self, ftag: &Box<dyn AudioTag + Sync + Send>, entry: &PathBuf) {
