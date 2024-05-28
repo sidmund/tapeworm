@@ -8,13 +8,17 @@ use sanitize_filename;
 use std::collections::HashMap;
 use std::{fs, io::BufRead, path::PathBuf};
 
-struct RegexConfig {
+type TagBox = Box<dyn AudioTag + Sync + Send>;
+
+struct TagExtractor {
     artist_separator: Regex,
     title_formats: Vec<Regex>,
     catch_all: Regex,
+    verbose: bool,
 }
-impl Default for RegexConfig {
-    fn default() -> Self {
+
+impl TagExtractor {
+    fn new(verbose: bool) -> Self {
         Self {
             artist_separator: Regex::new(
                 r"(?i)(\s(x|and)\s|(^|\s)(feat(uring|\.)?|ft\.?|w[⧸/])|&|,|，)",
@@ -25,8 +29,8 @@ impl Default for RegexConfig {
                 Regex::new(r"^「(?<genre>[^」]+)」\[(?<artists>[^\]]+)\]\s(?<title>.+)$").unwrap(),
                 // ARTISTS 'TITLE'EXTRA?
                 Regex::new(r"^(?<artists>[^'‘]+)\s['‘](?<title>[^'’]+)['’](?<extra>.+)?$").unwrap(),
-                // TRACK_NO.? ARTISTS - TITLE
-                Regex::new(r"^(?<track_no>\d+\.)?(?<artists>[^-_~｜]+)[-_~｜](?<title>.+)$")
+                // TRACK.? ARTISTS - TITLE
+                Regex::new(r"^(?<track>\d+\.)?(?<artists>[^-_~｜]+)[-_~｜](?<title>.+)$")
                     .unwrap(),
             ],
             catch_all: Regex::new(
@@ -38,7 +42,153 @@ impl Default for RegexConfig {
         (?<strip>[\[(][^\[\]()]*(full\sversion|(official\s)?((music\s)?video|audio)|m/?v|hq|hd)[^\[\]()]*[\])])
         ",
             ).unwrap(),
+            verbose,
         }
+    }
+
+    /// Separates a string like "Band ft Artist, Musician & Singer"
+    /// into a vector like ["Band", "Artist", "Musician", "Singer"].
+    fn separate(&self, artists: &str) -> Vec<String> {
+        self.artist_separator
+            .split(artists)
+            .filter(|a| !a.is_empty())
+            .map(|a| a.trim().to_string())
+            .collect()
+    }
+
+    /// Attempt to extract the following tags from the title:
+    /// - genre
+    /// - artists: can be a single artist or multiple, e.g. "Band", "Artist ft Singer"
+    /// - title
+    /// - track
+    /// - extra
+    /// The 'extra' group can be used to capture anything extra for independent further extraction,
+    /// commonly this could be remix or featuring artist information.
+    ///
+    /// # Parameters
+    /// - `full_title`: the title to match against
+    ///
+    /// # Returns
+    /// - `None`: if no tags were found (format could not capture anything)
+    /// - `Some(HashMap)`: map of tag name to tag value
+    fn tags_from<'a>(&self, full_title: &'a str) -> Option<HashMap<&'a str, &'a str>> {
+        for fmt in &self.title_formats {
+            let mut tags = HashMap::new();
+
+            for caps in fmt.captures_iter(full_title) {
+                if self.verbose {
+                    println!("\nRegex: {}\n{:#?}", fmt, caps);
+                }
+
+                for name in ["artists", "extra", "genre", "title", "track"] {
+                    if let Some(m) = caps.name(name) {
+                        tags.insert(name, m.as_str());
+                    }
+                }
+            }
+
+            if !tags.is_empty() {
+                if self.verbose {
+                    println!("Found:\n{:#?}", tags);
+                }
+                return Some(tags); // Stop as soon as one format can parse the title
+            }
+        }
+
+        None
+    }
+
+    /// Extract tags from the title metadata.
+    ///
+    /// # Returns
+    /// `TagProposal`: the found tags, contains at least the sanitized 'title'
+    fn build_tags(&self, meta_title: &str) -> TagProposal {
+        if self.verbose {
+            println!("Parsing: {}", meta_title);
+        }
+
+        let mut proposal = TagProposal::default();
+
+        // The full title (used for tag extracting)
+        let mut meta_title = String::from(meta_title);
+        // The resulting actual track title (some info might be stripped / added)
+        let mut title = meta_title.to_string();
+
+        if let Some(tags) = self.tags_from(&meta_title) {
+            if let Some(genre) = tags.get("genre") {
+                proposal.genre = Some(genre.to_string());
+            }
+            if let Some(track) = tags.get("track") {
+                let track = track.to_string();
+                title = util::remove_str_from_string(title, &track);
+                let track = String::from(&track[..track.len() - 1]); // Omit "."
+                proposal.track = track.parse::<u16>().ok();
+            }
+            if let Some(artists) = tags.get("artists") {
+                proposal.feature(self.separate(artists));
+            }
+            let rest_title = tags.get("title");
+            let extra = tags.get("extra").unwrap_or(&"");
+            if let Some(rest_title) = rest_title {
+                let rest_title = rest_title.trim();
+                let extra = extra.trim();
+                title = format!("{}{}", rest_title.to_string(), extra);
+                meta_title = format!("{}{}", rest_title.to_string(), extra);
+            }
+        }
+
+        for caps in self.catch_all.captures_iter(&meta_title) {
+            if self.verbose {
+                println!("{:#?}", caps);
+            }
+
+            if let Some(feat) = caps.name("feat") {
+                // Authors to the right of "-"
+                let feat = feat.as_str();
+                title = util::remove_str_from_string(title, feat);
+                let feat = util::remove_brackets(feat);
+                proposal.feature(self.separate(&feat));
+            }
+
+            if let Some(year) = caps.name("year") {
+                let year = year.as_str();
+                title = util::remove_str_from_string(title, year);
+                proposal.year = util::remove_brackets(year).parse::<i32>().ok();
+            }
+
+            if let Some(remix) = caps.name("remix") {
+                let remix = remix.as_str();
+                title = util::remove_str_from_string(title, remix);
+                let remix = util::remove_brackets(remix);
+                if remix.to_lowercase() != "original mix" {
+                    proposal.remix = Some(remix);
+                }
+            }
+
+            if let Some(album) = caps.name("album") {
+                let album = album.as_str();
+                title = util::remove_str_from_string(title, album);
+
+                let album = if let Some(album_rmv) = caps.name("album_rmv") {
+                    util::remove_str_from_string(album.to_string(), album_rmv.as_str())
+                } else {
+                    String::from(album)
+                };
+
+                proposal.album = Some(util::remove_brackets(&album));
+            }
+
+            if let Some(strip) = caps.name("strip") {
+                title = util::remove_str_from_string(title, strip.as_str());
+            }
+        }
+
+        proposal.title = Some(title);
+
+        if self.verbose {
+            println!("Got tags:\n{:?}", proposal);
+        }
+        proposal
     }
 }
 
@@ -83,10 +233,8 @@ impl TagProposal {
                     feat.push_str(&format!("{}, ", String::from(a)));
                 }
             }
-            if !feat.is_empty() {
-                if let Some(i) = feat.rfind(',') {
-                    feat.replace_range(i..=i, " &");
-                }
+            if let Some(i) = feat.rfind(',') {
+                feat.replace_range(i..=i, " &");
             }
         }
 
@@ -96,7 +244,7 @@ impl TagProposal {
         self.filename = sanitize_filename::sanitize(filename);
     }
 
-    fn present(&self, ftag: &Box<dyn AudioTag + Sync + Send>, entry: &PathBuf) {
+    fn present(&self, ftag: &TagBox, entry: &PathBuf) {
         let album = self.album.as_ref().map(|s| s.as_str());
         let album_artist = self.album_artist.as_ref().map(|s| s.as_str());
         let artist = self.artist.as_ref().map(|s| s.as_str());
@@ -149,11 +297,7 @@ impl TagProposal {
         Ok(())
     }
 
-    fn accept(
-        self,
-        mut ftag: Box<dyn AudioTag + Sync + Send>,
-        entry: &PathBuf,
-    ) -> types::UnitResult {
+    fn accept(self, mut ftag: TagBox, entry: &PathBuf) -> types::UnitResult {
         if let Some(s) = self.album {
             ftag.set_album_title(&s);
         }
@@ -247,12 +391,11 @@ pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
         return Err("'INPUT_DIR' must be set. See 'help'".into());
     }
 
-    let downloads =
-        PathBuf::from(config.lib_path.clone().unwrap()).join(config.input_dir.clone().unwrap());
-    let downloads: Vec<PathBuf> = util::filepaths_in(downloads)?;
+    let lib_path = config.lib_path.clone().unwrap();
+    let downloads = util::filepaths_in(lib_path.join(config.input_dir.clone().unwrap()))?;
     let total = downloads.len();
 
-    let regex = RegexConfig::default();
+    let extractor = TagExtractor::new(config.verbose);
 
     for (i, entry) in downloads.iter().enumerate() {
         let filename = entry.file_name().unwrap().to_owned().into_string().unwrap();
@@ -266,22 +409,22 @@ pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
         let ftag = ftag.unwrap();
 
         let title = if let Some(title) = ftag.title() {
-            String::from(title)
+            title.trim()
         } else {
             println!("! No 'title' tag present, skipping");
             continue;
         };
 
-        let mut proposal = if let Some(p) = build_tags(&regex, title.trim(), config.verbose) {
-            p
-        } else {
-            println!("! No extra tags extracted from 'title', skipping");
+        if title.is_empty() {
+            println!("! Empty 'title' tag, skipping");
             continue;
-        };
+        }
 
-        let old_artist = ftag.artist().map(|a| String::from(a));
-        if old_artist.is_some() && !config.override_artist {
-            proposal.feature(separate_artists(&regex, &old_artist.clone().unwrap()));
+        let mut proposal = extractor.build_tags(title);
+        if !config.override_artist {
+            if let Some(old_artist) = ftag.artist() {
+                proposal.feature(extractor.separate(old_artist)); // Keep the old artist(s)
+            }
         }
 
         loop {
@@ -290,7 +433,9 @@ pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
             match util::select("Accept?", vec![Yes, No, Edit], Yes, &mut reader) {
                 Ok(Edit) => proposal.edit(&mut reader)?,
                 Ok(Yes) => {
-                    proposal.accept(ftag, entry)?;
+                    if let Err(e) = proposal.accept(ftag, entry) {
+                        println!("! Could not write tag or filename: {}, skipping", e);
+                    }
                     break;
                 }
                 _ => break, // Don't write changes on Err(_) or Ok(No)
@@ -301,169 +446,12 @@ pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
     Ok(())
 }
 
-/// Separates a string like "Band ft Artist, Musician & Singer"
-/// into a vector like ["Band", "Artist", "Musician", "Singer"].
-fn separate_artists(regex: &RegexConfig, s: &str) -> Vec<String> {
-    regex
-        .artist_separator
-        .split(s)
-        .filter(|a| !a.is_empty())
-        .map(|a| a.trim().to_string())
-        .collect()
-}
-
-/// Attempt to extract the following tags from the title:
-/// - genre
-/// - artists: can be a single artist or multiple, e.g. "Band", "Artist ft Singer"
-/// - title
-/// - track_no
-/// - extra
-/// The 'extra' group can be used to capture anything extra for independent further extraction,
-/// commonly this could be remix or featuring artist information.
-///
-/// # Parameters
-/// - `format`: a regular expression with capture groups for any/all of the above tags
-/// - `full_title`: expected to be in the provided format
-///
-/// # Returns
-/// - `None`: if no tags were found (format could not capture anything)
-/// - `Some(HashMap)`: map of tag name to tag value
-fn from_format<'a>(
-    format: &Regex,
-    full_title: &'a str,
-    verbose: bool,
-) -> Option<HashMap<&'a str, &'a str>> {
-    let mut tags = HashMap::new();
-
-    for caps in format.captures_iter(full_title) {
-        if verbose {
-            println!("\nUsing Regex: {}\n{:#?}", format, caps);
-        }
-
-        for name in ["genre", "artists", "title", "track_no", "extra"] {
-            if let Some(m) = caps.name(name) {
-                tags.insert(name, m.as_str());
-            }
-        }
-    }
-
-    if tags.is_empty() {
-        None
-    } else {
-        if verbose {
-            println!("Got tags:\n{:#?}", tags);
-        }
-        Some(tags)
-    }
-}
-
-/// Extract tags from the title metadata.
-///
-/// # Returns
-/// - `None`: when the title is empty
-/// - `TagProposal`: the found tags, contains at least the sanitized 'title'
-fn build_tags<'a>(regex: &RegexConfig, meta_title: &str, verbose: bool) -> Option<TagProposal> {
-    if meta_title.is_empty() {
-        return None;
-    }
-
-    if verbose {
-        println!("Parsing: {}", meta_title);
-    }
-
-    let mut proposal = TagProposal::default();
-
-    // The full title (used for tag extracting)
-    let mut meta_title = String::from(meta_title);
-    // The resulting actual track title (some info might be stripped / added)
-    let mut title = meta_title.to_string();
-
-    for fmt in &regex.title_formats {
-        if let Some(tt) = from_format(fmt, &meta_title, verbose) {
-            if let Some(genre) = tt.get("genre") {
-                proposal.genre = Some(genre.to_string());
-            }
-            if let Some(track_no) = tt.get("track_no") {
-                let track_no = track_no.to_string();
-                title = util::remove_str_from_string(title, &track_no);
-                let track_no = String::from(&track_no[..track_no.len() - 1]); // Omit "."
-                proposal.track = track_no.parse::<u16>().ok();
-            }
-            if let Some(artists) = tt.get("artists") {
-                proposal.feature(separate_artists(regex, artists));
-            }
-            let rest_title = tt.get("title");
-            let extra = tt.get("extra").unwrap_or(&"");
-            if let Some(rest_title) = rest_title {
-                let rest_title = rest_title.trim();
-                let extra = extra.trim();
-                title = format!("{}{}", rest_title.to_string(), extra);
-                meta_title = format!("{}{}", rest_title.to_string(), extra);
-            }
-            break; // Stop as soon as one format can parse it
-        }
-    }
-
-    for caps in regex.catch_all.captures_iter(&meta_title) {
-        if verbose {
-            println!("{:#?}", caps);
-        }
-
-        if let Some(feat) = caps.name("feat") {
-            // Authors to the right of "-"
-            let feat = feat.as_str();
-            title = util::remove_str_from_string(title, feat);
-            let feat = util::remove_brackets(feat);
-            proposal.feature(separate_artists(regex, &feat));
-        }
-
-        if let Some(year) = caps.name("year") {
-            let year = year.as_str();
-            title = util::remove_str_from_string(title, year);
-            proposal.year = util::remove_brackets(year).parse::<i32>().ok();
-        }
-
-        if let Some(remix) = caps.name("remix") {
-            let remix = remix.as_str();
-            title = util::remove_str_from_string(title, remix);
-            let remix = util::remove_brackets(remix);
-            if remix.to_lowercase() != "original mix" {
-                proposal.remix = Some(remix);
-            }
-        }
-
-        if let Some(album) = caps.name("album") {
-            let album = album.as_str();
-            title = util::remove_str_from_string(title, album);
-
-            let album = if let Some(album_rmv) = caps.name("album_rmv") {
-                util::remove_str_from_string(album.to_string(), album_rmv.as_str())
-            } else {
-                String::from(album)
-            };
-
-            proposal.album = Some(util::remove_brackets(&album));
-        }
-
-        if let Some(strip) = caps.name("strip") {
-            title = util::remove_str_from_string(title, strip.as_str());
-        }
-    }
-
-    proposal.title = Some(title);
-
-    if verbose {
-        println!("Got tags:\n{:?}", proposal);
-    }
-    Some(proposal)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn check(regex: &RegexConfig, input: &str, expected: TagProposal) {
-        assert_eq!(build_tags(regex, input, true).unwrap(), expected);
+    fn check(extractor: &TagExtractor, input: &str, expected: TagProposal) {
+        assert_eq!(extractor.build_tags(input), expected);
     }
 
     macro_rules! song {
@@ -513,9 +501,9 @@ mod tests {
         };
     }
     macro_rules! track {
-        ($track_no: expr, $artists: expr, $title: expr) => {
+        ($track: expr, $artists: expr, $title: expr) => {
             TagProposal {
-                track: Some($track_no),
+                track: Some($track),
                 all_artists: Some($artists.split(';').map(String::from).collect()),
                 title: Some(String::from($title)),
                 ..Default::default()
@@ -535,7 +523,7 @@ mod tests {
 
     #[test]
     fn parses_spacing() {
-        let r = RegexConfig::default();
+        let r = TagExtractor::new(true);
         check(&r, "Band - Song", song!("Band", "Song"));
         check(&r, "Band- Song", song!("Band", "Song"));
         check(&r, "Band -Song", song!("Band", "Song"));
@@ -544,7 +532,7 @@ mod tests {
 
     #[test]
     fn parses_featuring_artists() {
-        let r = RegexConfig::default();
+        let r = TagExtractor::new(true);
         let inputs = [
             ("Artist & Band - Song", "Artist;Band"),
             ("Artist, Other & Another - Song", "Artist;Other;Another"),
@@ -564,20 +552,20 @@ mod tests {
 
     #[test]
     fn parses_year() {
-        let r = RegexConfig::default();
+        let r = TagExtractor::new(true);
         check(&r, "Band - Song (2024)", year!("Band", "Song", 2024));
         check(&r, "Band - Song 2024", year!("Band", "Song", 2024));
     }
 
     #[test]
     fn parses_track_number() {
-        let r = RegexConfig::default();
+        let r = TagExtractor::new(true);
         check(&r, "04. Band - Song", track!(4, "Band", "Song"));
     }
 
     #[test]
     fn parses_remix() {
-        let r = RegexConfig::default();
+        let r = TagExtractor::new(true);
         let inputs = [
             ("Band - Song [Club Remix]", "Club Remix"),
             ("Band - Song [Instrumental]", "Instrumental"),
@@ -595,7 +583,7 @@ mod tests {
 
     #[test]
     fn strips_useless_info() {
-        let r = RegexConfig::default();
+        let r = TagExtractor::new(true);
         let inputs = [
             "Artist - Song [HQ]",
             "Artist - Song [HD]",
@@ -615,7 +603,7 @@ mod tests {
 
     #[test]
     fn parses_complex_formats() {
-        let r = RegexConfig::default();
+        let r = TagExtractor::new(true);
         check(&r, "A & B - S (mix) 2003", rmx!("A;B", "S", "mix", 2003));
         check(&r, "「Big」[Band] Song", song!("Big", "Band", "Song"));
         check(&r, "Artist 'Title'", song!("Artist", "Title"));

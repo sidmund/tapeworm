@@ -15,7 +15,7 @@ pub fn edit<R: BufRead>(mut reader: R) -> types::HashMapResult {
     let mut edits = HashMap::new();
     loop {
         print!("?> ");
-        std::io::stdout().flush().unwrap();
+        std::io::stdout().flush()?;
         let cmd = util::input(&mut reader, false)?;
         match cmd.as_str() {
             "quit" | "q" => break,
