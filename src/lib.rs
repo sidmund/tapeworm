@@ -86,10 +86,8 @@ impl Config {
 
         let mut lib_conf_path = lib_path.join("lib");
         lib_conf_path.set_extension("conf");
-
         let mut input_path = lib_path.join("input");
         input_path.set_extension("txt");
-
         let mut yt_dlp_conf_path = lib_path.join("yt-dlp");
         yt_dlp_conf_path.set_extension("conf");
 
@@ -133,29 +131,31 @@ impl Config {
                 continue;
             }
 
-            if let Some((key, value)) = line.split_once("=") {
-                match key.to_lowercase().as_str() {
-                    // General
-                    "description" => self.lib_desc = Some(String::from(value)),
-                    "verbose" => self.verbose = value.parse::<bool>()?,
-                    // Download
-                    "clear_input" => self.clear_input = value.parse::<bool>()?,
-                    "confirm_downloads" => self.confirm_downloads = value.parse::<bool>()?,
-                    // Tag
-                    "override_artist" => self.override_artist = value.parse::<bool>()?,
-                    "filename_template" => self.filename_template = String::from(value),
-                    "title_template" => self.title_template = String::from(value),
-                    // Tag, Deposit
-                    "input_dir" => self.input_dir = Some(PathBuf::from(value)),
-                    // Deposit
-                    "target_dir" => self.target_dir = Some(PathBuf::from(value)),
-                    "organize" => self.organize = Some(String::from(value)),
-                    // Process
-                    "steps" => self.steps = Some(value.split(',').map(String::from).collect()),
-                    _ => return Err(format!("Invalid config option: {}", key).into()),
-                }
-            } else {
+            let option = line.split_once("=");
+            if option.is_none() {
                 return Err(format!("Invalid config line: {}", line).into());
+            }
+
+            let (key, value) = option.unwrap();
+            match key.to_lowercase().as_str() {
+                // General
+                "description" => self.lib_desc = Some(String::from(value)),
+                "verbose" => self.verbose = value.parse::<bool>()?,
+                // Download
+                "clear_input" => self.clear_input = value.parse::<bool>()?,
+                "confirm_downloads" => self.confirm_downloads = value.parse::<bool>()?,
+                // Tag
+                "override_artist" => self.override_artist = value.parse::<bool>()?,
+                "filename_template" => self.filename_template = String::from(value),
+                "title_template" => self.title_template = String::from(value),
+                // Tag, Deposit
+                "input_dir" => self.input_dir = Some(PathBuf::from(value)),
+                // Deposit
+                "target_dir" => self.target_dir = Some(PathBuf::from(value)),
+                "organize" => self.organize = Some(String::from(value)),
+                // Process
+                "steps" => self.steps = Some(value.split(',').map(String::from).collect()),
+                _ => return Err(format!("Invalid config option: {}", key).into()),
             }
         }
 
@@ -225,7 +225,6 @@ impl Config {
         } else if config.command == "show" {
             config.build_lib_conf_options()?; // just load the library settings
         } else if ["download", "tag", "deposit", "process"].contains(&config.command.as_str()) {
-            // Commands that use options from lib.conf / CLI
             config.build_lib_conf_options()?; // override defaults with lib.conf
             config.parse_cli_options(args)?; // override defaults/lib.conf with CLI
         }
@@ -237,23 +236,19 @@ impl Config {
         if self.command.as_str() != "process" {
             return Ok(vec![&self.command]);
         }
-
-        if let Some(steps) = &self.steps {
-            let mut commands = Vec::with_capacity(steps.len());
-            for step in steps {
-                if step == "add" || step == "process" {
-                    return Err(format!(
-                        "Command '{}' not supported as a processing step. See 'help'",
-                        step
-                    )
-                    .into());
-                }
-                commands.push(step);
-            }
-            return Ok(commands);
+        if self.steps.is_none() {
+            return Err("No processing steps specified. See 'help'".into());
         }
 
-        Err("No processing steps specified. See 'help'".into())
+        let steps = self.steps.as_ref().unwrap();
+        let mut commands = Vec::with_capacity(steps.len());
+        for step in steps {
+            if step == "add" || step == "process" {
+                return Err(format!("Unsupported processing step '{}'. See 'help'", step).into());
+            }
+            commands.push(step);
+        }
+        Ok(commands)
     }
 }
 
@@ -270,6 +265,5 @@ pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
             _ => return Err("Unrecognized command. See 'help'".into()),
         }
     }
-
     Ok(())
 }
