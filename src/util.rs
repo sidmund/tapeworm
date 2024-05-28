@@ -81,7 +81,8 @@ pub fn select<R: BufRead>(
     question.pop(); // Remove trailing '/'
     info.pop(); // Remove trailing ' '
     info.pop(); // Remove trailing ','
-    println!("{} ({})", question, info);
+    print!("{} ({}) ", question, info);
+    std::io::stdout().flush()?;
 
     let input = input(&mut reader, true)?;
     match input.chars().nth(0) {
