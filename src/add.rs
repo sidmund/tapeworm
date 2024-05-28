@@ -7,24 +7,23 @@ use url::Url;
 /// The library folder and input file are created if they do not exist.
 pub fn run(config: &Config) -> types::UnitResult {
     util::guarantee_dir_path(config.lib_path.clone().unwrap())?;
-
-    let terms = config.terms.as_ref().unwrap().iter().map(|s| s.to_string());
-    let contents = format!("{}\n", parse(terms.collect()).join("\n"));
-    util::append(&config.input_path.clone().unwrap(), contents)?;
-
+    util::append(
+        config.input_path.as_ref().unwrap(),
+        format!("{}\n", parse(config.terms.as_ref().unwrap())), // \n needed for next append
+    )?;
     Ok(())
 }
 
-fn parse(terms: Vec<String>) -> Vec<String> {
+fn parse(terms: &Vec<String>) -> String {
     let mut inputs: Vec<String> = Vec::new();
     for term in terms {
-        if let Ok(url) = Url::parse(&term) {
+        if let Ok(url) = Url::parse(term) {
             inputs.extend(scrape(url));
         } else {
             inputs.push(format!("ytsearch:{}", term));
         }
     }
-    inputs
+    inputs.join("\n")
 }
 
 /// If `url` is scrapeable, return a list of scraped queries from that page.
@@ -52,10 +51,13 @@ mod tests {
     #[test]
     fn parses_terms() {
         let terms = vec![String::from("Darude"), String::from("Sandstorm")];
-        assert_eq!(parse(terms), vec!["ytsearch:Darude", "ytsearch:Sandstorm"]);
+        assert_eq!(
+            parse(&terms),
+            String::from("ytsearch:Darude\nytsearch:Sandstorm")
+        );
 
         let terms = vec![String::from("Darude Sandstorm")];
-        assert_eq!(parse(terms), vec!["ytsearch:Darude Sandstorm"]);
+        assert_eq!(parse(&terms), String::from("ytsearch:Darude Sandstorm"));
     }
 
     #[test]
@@ -64,7 +66,14 @@ mod tests {
             String::from("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
             String::from("https://www.youtube.com/watch?v=y6120QOlsfU"),
         ];
-        assert_eq!(parse(terms.clone()), terms);
+        assert_eq!(
+            parse(&terms),
+            String::from(
+                "\
+https://www.youtube.com/watch?v=dQw4w9WgXcQ
+https://www.youtube.com/watch?v=y6120QOlsfU"
+            )
+        );
     }
 
     #[test]
@@ -76,13 +85,14 @@ mod tests {
             String::from("https://www.youtube.com/watch?v=y6120QOlsfU"),
         ];
         assert_eq!(
-            parse(terms),
-            vec![
-                "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-                "ytsearch:Darude Sandstorm",
-                "ytsearch:Rickroll",
-                "https://www.youtube.com/watch?v=y6120QOlsfU"
-            ]
+            parse(&terms),
+            String::from(
+                "\
+https://www.youtube.com/watch?v=dQw4w9WgXcQ
+ytsearch:Darude Sandstorm
+ytsearch:Rickroll
+https://www.youtube.com/watch?v=y6120QOlsfU"
+            )
         );
     }
 }

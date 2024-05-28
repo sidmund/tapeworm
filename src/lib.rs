@@ -70,8 +70,11 @@ impl Config {
         Ok(())
     }
 
-    /// Set up the library and its configuration paths. If building for a command that is not "add",
-    /// this will error if the library does not exist.
+    /// Set up the library and its configuration paths.
+    ///
+    /// # Errors
+    /// When the library folder is not found. This applies to every library command, except `add`, which will
+    /// create it.
     fn setup_library(&mut self, library: String) -> types::UnitResult {
         let lib_path = PathBuf::from(dirs::config_dir().unwrap())
             .join("tapeworm")
@@ -209,6 +212,36 @@ impl Config {
         Ok(())
     }
 
+    fn require_input_dir(&mut self) -> types::UnitResult {
+        if self.input_dir.is_none() {
+            return Err("Input directory not specified. See 'help'".into());
+        }
+
+        let lib_path = self.lib_path.as_ref();
+        self.input_dir = Some(lib_path.unwrap().join(self.input_dir.as_ref().unwrap()));
+        let input_dir = self.input_dir.as_ref().unwrap();
+        if fs::metadata(input_dir).is_err() {
+            return Err(format!("Input directory not found: {}", input_dir.display()).into());
+        }
+
+        Ok(())
+    }
+
+    fn require_target_dir(&mut self) -> types::UnitResult {
+        if self.target_dir.is_none() {
+            return Err("Target directory not specified. See 'help'".into());
+        }
+
+        let lib_path = self.lib_path.as_ref();
+        self.target_dir = Some(lib_path.unwrap().join(self.target_dir.as_ref().unwrap()));
+        let target_dir = self.target_dir.as_ref().unwrap();
+        if fs::metadata(target_dir).is_err() {
+            return Err(format!("Target directory not found: {}", target_dir.display()).into());
+        }
+
+        Ok(())
+    }
+
     pub fn build(mut args: impl Iterator<Item = String>) -> types::ConfigResult {
         args.next(); // Consume program name
 
@@ -228,6 +261,11 @@ impl Config {
         } else if ["download", "tag", "deposit", "process"].contains(&config.command.as_str()) {
             config.build_lib_conf_options()?; // override defaults with lib.conf
             config.parse_cli_options(args)?; // override defaults/lib.conf with CLI
+            config.require_input_dir()?;
+        }
+
+        if config.command.as_str() == "deposit" {
+            config.require_target_dir()?;
         }
 
         Ok(config)

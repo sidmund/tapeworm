@@ -1,30 +1,29 @@
-//! Informational functionality.
-
 use crate::{types, Config};
-use std::{fs, path::PathBuf};
+use std::fs;
 
-/// Show the library's discovered config files.
+/// Show the library's status and discovered config files.
 pub fn show(config: &Config) -> types::UnitResult {
-    let lib = config.library.clone().unwrap();
-    let desc = config.lib_desc.clone().unwrap_or(String::from(""));
-    println!("\n  {}: {}\n", lib, desc);
+    print!("\n  {}", config.library.as_ref().unwrap());
+    if let Some(desc) = &config.lib_desc {
+        println!(": {}\n", desc);
+    } else {
+        println!();
+    }
 
-    let input_path = config.input_path.clone().unwrap();
-    if fs::metadata(&input_path).is_ok() {
+    let input_path = config.input_path.as_ref().unwrap();
+    if fs::metadata(input_path).is_ok() {
         print!("  > input.txt : ");
-        let inputs = fs::read_to_string(&input_path)?;
+        let inputs = fs::read_to_string(input_path)?;
         if inputs.is_empty() {
             println!("Nothing to download");
         } else {
             println!("{} to download", inputs.lines().count());
         }
     }
-
-    if fs::metadata(&config.lib_conf_path.clone().unwrap()).is_ok() {
+    if fs::metadata(config.lib_conf_path.as_ref().unwrap()).is_ok() {
         println!("  > lib.conf");
     }
-
-    if fs::metadata(&config.yt_dlp_conf_path.clone().unwrap()).is_ok() {
+    if fs::metadata(config.yt_dlp_conf_path.as_ref().unwrap()).is_ok() {
         println!("  > yt-dlp.conf");
     }
 
@@ -34,14 +33,14 @@ pub fn show(config: &Config) -> types::UnitResult {
 
 /// Print the list of libraries discovered in the tapeworm config directory.
 pub fn list() -> types::UnitResult {
-    let conf_path = PathBuf::from(dirs::config_dir().unwrap()).join("tapeworm");
-    if let Ok(libraries) = fs::read_dir(&conf_path) {
-        libraries
-            .map(|l| l.unwrap())
-            .filter(|l| l.path().is_dir())
-            .for_each(|l| println!("{}", l.file_name().to_str().unwrap()));
+    if let Ok(libraries) = fs::read_dir(dirs::config_dir().unwrap().join("tapeworm")) {
+        for lib in libraries {
+            let lib = lib?;
+            if lib.path().is_dir() {
+                println!("{}", lib.file_name().to_str().unwrap());
+            }
+        }
     }
-
     Ok(())
 }
 

@@ -1,5 +1,3 @@
-//! Download all inputs in the library.
-
 use crate::util::PromptOption::{No, Yes, YesToAll};
 use crate::{types, util, Config};
 use std::collections::HashSet;
@@ -9,10 +7,10 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
-    let mut yt_dlp_conf_path = config.yt_dlp_conf_path.clone();
-    if fs::metadata(yt_dlp_conf_path.as_ref().unwrap()).is_err() {
+    let mut yt_dlp_conf_path = config.yt_dlp_conf_path.as_ref();
+    if fs::metadata(yt_dlp_conf_path.unwrap()).is_err() {
         println!(
-            "Warning: {} not found
+            "Warning! Could not find: {}
 If you continue, yt-dlp will be invoked without any options, which will yield inconsistent results.",
             yt_dlp_conf_path.unwrap().to_str().unwrap()
         );
@@ -22,12 +20,8 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
         }
     }
 
-    let input_path = config.input_path.clone().unwrap();
-    if fs::metadata(&input_path).is_err() {
-        return Err(format!("Input file not found: {}", input_path.to_str().unwrap()).into());
-    }
-
-    let inputs = fs::read_to_string(&input_path)?;
+    let input_path = config.input_path.as_ref().unwrap();
+    let inputs = fs::read_to_string(input_path).unwrap_or(String::new());
     if inputs.is_empty() {
         if config.verbose {
             println!("Nothing to download. Library is empty.");
@@ -44,7 +38,7 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
     yt_dlp(yt_dlp_conf_path, inputs)?;
 
     if config.clear_input {
-        fs::write(&input_path, "")?;
+        fs::write(input_path, "")?;
     }
 
     if config.confirm_downloads {
@@ -55,7 +49,7 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
 }
 
 /// Download URLs with yt-dlp
-fn yt_dlp(conf_path: Option<PathBuf>, urls: HashSet<String>) -> types::UnitResult {
+fn yt_dlp(conf_path: Option<&PathBuf>, urls: HashSet<String>) -> types::UnitResult {
     let mut command = Command::new("yt-dlp");
     if let Some(conf_path) = conf_path {
         command.arg("--config-location").arg(conf_path);
@@ -78,10 +72,7 @@ fn yt_dlp(conf_path: Option<PathBuf>, urls: HashSet<String>) -> types::UnitResul
 }
 
 fn confirm_downloads<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
-    let lib_path = config.lib_path.clone().unwrap();
-
-    let downloads = lib_path.join(config.input_dir.clone().unwrap());
-    let downloads: Vec<PathBuf> = util::filepaths_in(downloads)?;
+    let downloads: Vec<PathBuf> = util::filepaths_in(config.input_dir.as_ref().unwrap())?;
     if downloads.is_empty() {
         return Ok(());
     }

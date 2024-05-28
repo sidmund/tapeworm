@@ -125,9 +125,9 @@ fn downloads_and_clears_input() {
 fn fails_tag_on_incorrect_args() {
     let lib = "tw-test-tag-fail";
     let lib_path = create_lib(lib);
-    assert!(run(setup(vec![lib, "tag"]).unwrap()).is_err());
-    assert!(run(setup(vec![lib, "tag", "-i"]).unwrap()).is_err());
-    assert!(run(setup(vec![lib, "tag", "-i", "tw-test-uy4hfaif"]).unwrap()).is_err());
+    assert!(setup(vec![lib, "tag"]).is_err());
+    assert!(setup(vec![lib, "tag", "-i"]).is_err());
+    assert!(setup(vec![lib, "tag", "-i", "tw-test-uy4hfaif"]).is_err());
     destroy(lib_path);
 }
 
@@ -355,7 +355,7 @@ fn deposits() {
 fn fails_to_process_without_steps() {
     let lib = "tw-test-no-steps";
     let lib_path = create_lib(lib);
-    assert!(run(setup(vec![lib, "process"]).unwrap()).is_err());
+    assert!(setup(vec![lib, "process"]).is_err());
     destroy(lib_path);
 }
 
@@ -363,8 +363,8 @@ fn fails_to_process_without_steps() {
 fn fails_to_process_illegal_commands() {
     let lib = "tw-test-illegal";
     let lib_path = create_lib(lib);
-    assert!(run(setup(vec![lib, "process", "-s", "add"]).unwrap()).is_err());
-    assert!(run(setup(vec![lib, "process", "-s", "process"]).unwrap()).is_err());
-    assert!(run(setup(vec![lib, "process", "-s", "list,process"]).unwrap()).is_err());
+    assert!(setup(vec![lib, "process", "-s", "add"]).is_err());
+    assert!(setup(vec![lib, "process", "-s", "process"]).is_err());
+    assert!(setup(vec![lib, "process", "-s", "list,process"]).is_err());
     destroy(lib_path);
 }

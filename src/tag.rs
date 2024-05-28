@@ -387,12 +387,7 @@ where
 /// Titles generally contain extra information, e.g. "Artist ft. Band - Song (2024) [Remix]"
 /// Information such as collaborating artists, year, remix, etc. are extracted.
 pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
-    if config.input_dir.is_none() {
-        return Err("'INPUT_DIR' must be set. See 'help'".into());
-    }
-
-    let lib_path = config.lib_path.clone().unwrap();
-    let downloads = util::filepaths_in(lib_path.join(config.input_dir.clone().unwrap()))?;
+    let downloads = util::filepaths_in(config.input_dir.as_ref().unwrap())?;
     let total = downloads.len();
 
     let extractor = TagExtractor::new(config.verbose);

@@ -49,33 +49,23 @@ impl DepositMode {
 /// `TARGET_DIR`. If the target folder does not exist, it is created. If a file already exists in
 /// the target folder, it will be overwritten upon user confirmation.
 pub fn run<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
-    if config.target_dir.is_none() {
-        return Err("'TARGET_DIR' required for moving downloads. See 'help'".into());
-    } else if config.input_dir.is_none() {
-        return Err("'INPUT_DIR' required for moving downloads to 'TARGET_DIR'. See 'help'".into());
-    }
-
-    let lib_path = config.lib_path.clone().unwrap();
-
-    let downloads = util::filepaths_in(lib_path.join(config.input_dir.clone().unwrap()))?;
+    let downloads = util::filepaths_in(config.input_dir.as_ref().unwrap())?;
     if downloads.is_empty() {
         return Ok(());
     }
-
-    let target_dir = util::guarantee_dir_path(lib_path.join(config.target_dir.clone().unwrap()))?;
+    let target_dir = util::guarantee_dir_path(config.target_dir.clone().unwrap())?;
 
     if let Some(errors) = deposit(target_dir, downloads, config.organize.func(), reader) {
-        return Err(format!(
+        Err(format!(
             "Could not move {} files to target directory:{}",
             errors.len(),
             errors.iter().fold(String::new(), |a, b| a + "\n" + &b)
         )
-        .into());
+        .into())
+    } else {
+        println!();
+        Ok(())
     }
-
-    println!();
-
-    Ok(())
 }
 
 /// Sort the `file` into a dated subfolder of `target_dir`:
