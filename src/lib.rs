@@ -282,10 +282,11 @@ impl Config {
         let steps = self.steps.as_ref().unwrap();
         let mut commands = Vec::with_capacity(steps.len());
         for step in steps {
-            if step == "add" || step == "process" {
+            if ["download", "tag", "deposit"].contains(&step.as_str()) {
+                commands.push(step);
+            } else {
                 return Err(format!("Unsupported processing step '{}'. See 'help'", step).into());
             }
-            commands.push(step);
         }
         Ok(commands)
     }
