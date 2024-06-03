@@ -1,6 +1,7 @@
 mod common;
 
 use audiotags::Tag;
+use chrono::{Datelike, Utc};
 use common::*;
 use std::{fs, io::BufReader, path::PathBuf};
 
@@ -327,21 +328,17 @@ fn deposit(lib: &str, mode: &str, filename: &str, az_path: &PathBuf, date_path: 
 
 #[test]
 fn deposits() {
+    // Files are copied from resources/test, so their date will be today
+    let today = Utc::now();
+    let today = PathBuf::from(today.year().to_string()).join(format!("{:02}", today.month()));
+
     let files = [
-        (
-            "no_tags.mp3",
-            PathBuf::from("N"),
-            PathBuf::from("2024").join("05"),
-        ),
-        (
-            "tagged.mp3",
-            PathBuf::from("A").join("Artist"),
-            PathBuf::from("2024").join("05"),
-        ),
+        ("no_tags.mp3", PathBuf::from("N"), &today),
+        ("tagged.mp3", PathBuf::from("A").join("Artist"), &today),
         (
             "tagged_album.mp3",
             PathBuf::from("A").join("Artist").join("Album"),
-            PathBuf::from("2024").join("05"),
+            &today,
         ),
     ];
     for (filename, az_path, date_path) in files {
