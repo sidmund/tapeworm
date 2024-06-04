@@ -84,6 +84,7 @@ COMMANDS
 
         OPTIONS
         -i      Set the INPUT_DIR, required if not set in lib.conf
+        -t      Automatically write discovered tags
 
     LIBRARY deposit [OPTIONS]
         Move downloaded files to the directory specified by TARGET_DIR

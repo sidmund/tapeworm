@@ -180,6 +180,7 @@ impl Config {
                     'c' if self.command == "download" || self.command == "process" => {
                         self.clear_input = true;
                     }
+                    't' if self.command == "tag" => self.auto_tag = true,
                     'i' if self.command == "tag"
                         || self.command == "deposit"
                         || self.command == "process" =>

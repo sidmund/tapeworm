@@ -160,7 +160,7 @@ fn tag_skips_unsupported_files() {
     destroy(lib_path);
 }
 
-fn tag(ext: &str) {
+fn tag(ext: &str, auto_tag: bool) {
     let lib = "tw-test-tag-yes";
     let lib_path = create_lib(lib);
 
@@ -175,10 +175,15 @@ fn tag(ext: &str) {
     assert_eq!(tag.title().unwrap(), "Artist - Song (Radio Edit)");
     assert_eq!(tag.artist(), None);
 
-    let buffer = Vec::from(b"y\n");
-    let reader: BufReader<&[u8]> = BufReader::new(buffer.as_ref());
-    let config = setup(vec![lib, "tag", "-i", lib_path.to_str().unwrap()]).unwrap();
-    run_with(config, reader).unwrap();
+    if auto_tag {
+        let config = setup(vec![lib, "tag", "-ti", lib_path.to_str().unwrap()]).unwrap();
+        run(config).unwrap();
+    } else {
+        let buffer = Vec::from(b"y\n");
+        let reader: BufReader<&[u8]> = BufReader::new(buffer.as_ref());
+        let config = setup(vec![lib, "tag", "-i", lib_path.to_str().unwrap()]).unwrap();
+        run_with(config, reader).unwrap();
+    }
 
     assert!(fs::metadata(lib_path.join(&file)).is_err());
     let tag = Tag::new().read_from_path(&expected).unwrap();
@@ -190,8 +195,9 @@ fn tag(ext: &str) {
 
 #[test]
 fn tags_diverse_audio_formats_with_title_tag() {
-    tag("mp3");
-    tag("flac");
+    tag("mp3", false);
+    tag("flac", false);
+    tag("mp3", true);
 }
 
 #[test]
