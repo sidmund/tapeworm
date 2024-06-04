@@ -174,6 +174,7 @@ How a library uses tapeworm's commands can be configured in the `lib.conf` file.
 
 | Setting name | Default value | Applicable command | Description |
 |:-|:-|:-|:-|
+| AUTO_TAG | false | `tag` | Write discovered tags without confirmation or possibility to edit |
 | CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
 | CONFIRM_DOWNLOADS | false | `download` | By default, `download` will simply exit when done, and all downloaded files are kept. If this setting is enabled however, the user will be asked to confirm or delete each downloaded file. E.g. this option comes in useful when downloading from queries, as the results can be different than expected. |
 | DESCRIPTION | | `show` | Description of the library, used for informational purposes |
@@ -252,7 +253,8 @@ echo "STEPS=download,tag,deposit" >> ~/.config/tapeworm/music/lib.conf
 tapeworm process music
 
 # To fully automate processing, make sure that:
-echo "CONFIRM_DOWNLOADS=false" >> path/to/lib.conf  # is already 'false' by default
+echo "AUTO_TAG=true" >> path/to/lib.conf
+echo "CONFIRM_DOWNLOADS=false" >> path/to/lib.conf
 # TODO add other user input bypass options
 ```
 

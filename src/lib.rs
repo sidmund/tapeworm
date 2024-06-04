@@ -38,6 +38,7 @@ pub struct Config {
     pub title_template: String,
     pub filename_template: String,
     pub input_dir: Option<PathBuf>,
+    pub auto_tag: bool,
 
     // Deposit options
     pub organize: DepositMode,
@@ -148,6 +149,7 @@ impl Config {
                 "override_artist" => self.override_artist = value.parse::<bool>()?,
                 "filename_template" => self.filename_template = String::from(value),
                 "title_template" => self.title_template = String::from(value),
+                "auto_tag" => self.auto_tag = value.parse::<bool>()?,
                 // Tag, Deposit
                 "input_dir" => self.input_dir = Some(PathBuf::from(value)),
                 // Deposit

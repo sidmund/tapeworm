@@ -425,6 +425,14 @@ pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
         loop {
             proposal.update(&config.title_template, &config.filename_template);
             proposal.present(&ftag, entry);
+
+            if config.auto_tag {
+                if let Err(e) = proposal.accept(ftag, entry) {
+                    println!("! Could not write tag or filename: {}, skipping", e);
+                }
+                break;
+            }
+
             match util::select("Accept?", vec![Yes, No, Edit], Yes, &mut reader) {
                 Ok(Edit) => proposal.edit(&mut reader)?,
                 Ok(Yes) => {
