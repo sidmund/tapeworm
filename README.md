@@ -175,8 +175,8 @@ How a library uses tapeworm's commands can be configured in the `lib.conf` file.
 | Setting name | Default value | Applicable command | Description |
 |:-|:-|:-|:-|
 | AUTO_TAG | false | `tag` | Write discovered tags without confirmation or possibility to edit |
+| AUTO_DOWNLOAD | false | `download` | By default, `download` will ask the user to confirm or delete each downloaded file. Enable this setting to automatically keep all downloads. Manual confirmation may come in useful when downloading from queries, as the results can be different than expected. |
 | CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
-| CONFIRM_DOWNLOADS | false | `download` | By default, `download` will simply exit when done, and all downloaded files are kept. If this setting is enabled however, the user will be asked to confirm or delete each downloaded file. E.g. this option comes in useful when downloading from queries, as the results can be different than expected. |
 | DESCRIPTION | | `show` | Description of the library, used for informational purposes |
 | FILENAME_TEMPLATE | `{artist} - {title}` | `tag` | Files will be formatted according to this template. See [Tag format](#tag-format). In this case, the `title` refers to the title as formatted by `TITLE_TEMPLATE`. Note that the extension should not be specified. |
 | INPUT_DIR | | `tag`, `deposit` | The folder where the `tag` and `deposit` commands take their inputs from. If you use the `download` command, you'll generally want yt-dlp to put its downloads into this folder, so they can be processed further. The folder is either a LIBRARY-relative path or an absolute path. **Required** for `tag` and `deposit` commands. |
@@ -252,9 +252,9 @@ Note that each processing step is executed manually. To automate this further, s
 echo "STEPS=download,tag,deposit" >> ~/.config/tapeworm/music/lib.conf
 tapeworm process music
 
-# To fully automate processing, make sure that:
+# To fully automate processing, make sure to enable:
 echo "AUTO_TAG=true" >> path/to/lib.conf
-echo "CONFIRM_DOWNLOADS=false" >> path/to/lib.conf
+echo "AUTO_DOWNLOAD=true" >> path/to/lib.conf
 # TODO add other user input bypass options
 ```
 

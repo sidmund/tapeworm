@@ -41,11 +41,11 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
         fs::write(input_path, "")?;
     }
 
-    if config.confirm_downloads {
-        confirm_downloads(config, &mut reader)?;
+    if config.auto_download {
+        Ok(())
+    } else {
+        confirm_downloads(config, &mut reader)
     }
-
-    Ok(())
 }
 
 /// Download URLs with yt-dlp

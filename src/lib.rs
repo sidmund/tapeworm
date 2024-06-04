@@ -30,7 +30,7 @@ pub struct Config {
 
     // Download options
     pub clear_input: bool,
-    pub confirm_downloads: bool,
+    pub auto_download: bool,
     pub verbose: bool,
 
     // Tag options
@@ -144,7 +144,7 @@ impl Config {
                 "verbose" => self.verbose = value.parse::<bool>()?,
                 // Download
                 "clear_input" => self.clear_input = value.parse::<bool>()?,
-                "confirm_downloads" => self.confirm_downloads = value.parse::<bool>()?,
+                "auto_download" => self.auto_download = value.parse::<bool>()?,
                 // Tag
                 "override_artist" => self.override_artist = value.parse::<bool>()?,
                 "filename_template" => self.filename_template = String::from(value),
