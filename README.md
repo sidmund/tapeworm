@@ -1,91 +1,178 @@
 # tapeworm
 
-tapeworm is a media file processor written in Rust. Its features are:
+tapeworm is a media file processing utility written in Rust.
 
-- Scrape websites for URLs or queries, see [supported websites](#supported-websites-for-scraping)
-- Download (scraped) URLs and queries
-- Manage different yt-dlp configurations
-- Extract additional tags from the `title` tag (only for music/video)
-- Organize downloaded/tagged files into directories
+## :sparkles: Features
 
-tapeworm uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) for downloading and can download whatever yt-dlp can download.
+- Store different sets of URLs and/or queries in separate media libraries
+- Scrape websites for URLs or queries
+- Download (scraped) URLs and queries using library-specific settings
+- Uses [yt-dlp](https://github.com/yt-dlp/yt-dlp) to download
+- Extract (additional) tags from the `title` tag for [supported extensions](https://docs.rs/audiotags/latest/audiotags/#supported-formats)
+- Organize files into a media library
 
-## Is this for you?
-
-If you just need to download URL(s), use yt-dlp. yt-dlp has options for specifying an input file and configuration files. yt-dlp also works with queries like `yt-dlp ytsearch:query`. If that is not enough and you need some of the following features, tapeworm is for you:
-
-- You want to obtain URLs/queries from sites not supported by yt-dlp, e.g. yt-dlp cannot download from Spotify; but tapeworm can scrape Spotify for song information and will download the songs using `ytsearch` queries
-- You want a single application to store URLs, to download them, to tag them, and to organize them
-- You want to setup different download options for different sets of input URLs, and be able to easily configure and invoke them. E.g. you have a music and a video library and want a single application to easily download sources for them with the right options
-- You like the abstraction tapeworm provides by never having to specify the config file yourself, or worrying about what file to store URLs in, as this can all be done with simple tapeworm commands
-
-## Build
+## :hammer: Build
 
 A Rust installation is required. tapeworm compiles with Rust 1.74.0+ (stable).
 
 To build tapeworm:
-```sh
+```bash
 git clone https://github.com/sidmund/tapeworm
 cd tapeworm
 cargo build --release
 ./target/release/tapeworm help
 ```
 
-## Usage
+## :rocket: Usage
 
-tapeworm works with "libraries". A library specifies a.o. what files to download, how to download them, and how to process them. Commonly, libraries are used for downloading music/video. However, you can also use libraries just for tagging files, or organizing them; and skip the download functionality altogether.
+tapeworm provides various independent "building blocks" (commands) that a **library** may use to configure its functionality. A **library**, as a dedicated media collection and manager, tends to specify *what* to download, *how* to download, and how to *process* downloads. Some examples of what you might set up (also see [detailed examples including configuration](#bulb-examples)):
 
-Minimal example setup and usage when you want to use tapeworm for downloading:
+- "YouTube channel archiver": a library setup that only uses the `download` functionality
+- "Music downloader": a library that uses both `download` and `tag` modules
+- "File organizer": only uses `deposit` functionality
 
-```sh
-# Create the library by recording a query
-tapeworm LIBRARY add song  # records 'ytsearch:song'
-tapeworm LIBRARY add "the artist - a song"  # records 'ytsearch:the artist - a song'
-tapeworm LIBRARY add https://youtube.com/watch?v=123 # records the URL
+A library is configured at one of the following paths:
 
-# Download all URLs/queries
+- Unix: `/home/<USER>/.config/tapeworm/<LIBRARY>/`
+- Windows: `/c/Users/<USER>/AppData/Roaming/tapeworm/<LIBRARY>/`
+
+Each library may contain some of the following files:
+
+- **input.txt**: search queries and/or URLs (only needed for `add` and `download`)
+- **lib.conf**: library settings, see [configuration](#wrench-configuration)
+- **yt-dlp.conf**: yt-dlp options (only needed for `download`)
+
+How these files are used by different commands is explained below.
+
+### :link: Storing URLs and queries
+
+The `add` command stores URLs and queries into a library's `input.txt` file. These are then used as inputs for the [download](#-downloading) command. The first call to `add` will create the library folder and the `input.txt` file, if not present yet. Each line in this file is treated as a separate URL or query. Note that non-URLs are added as YouTube search queries.
+```bash
+tapeworm LIBRARY add song  # add a query, creates the input.txt file
+tapeworm LIBRARY add "the artist - a song"  # add a query
+tapeworm LIBRARY add https://youtube.com/watch?v=123  # add a URL
+tapeworm LIBRARY add https://youtube.com/watch?v=456 "theme song" https://youtube.com/watch?v=789
+```
+`LIBRARY/input.txt` now contains:
+```
+ytsearch:song
+ytsearch:the artist - a song
+https://youtube.com/watch?v=123
+https://youtube.com/watch?v=456
+ytsearch:theme song
+https://youtube.com/watch?v=789
+```
+
+#### Supported URLs
+
+Because `download` uses yt-dlp, [any site supported by it](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md) can be added. Since yt-dlp cannot download DRM-restricted content, tapeworm provides some workarounds for the following sites:
+
+- Spotify playlists: song information is scraped and converted to downloadable `ytsearch` queries
+
+### :link: Downloading
+
+The `download` command takes *all* inputs stored in the library and processes them according to the [yt-dlp configuration](#yt-dlpconf). Inputs may be added by the `add` command, or they can be manually entered into `input.txt` inside the library folder. Note that inputs must be [supported URLs or queries](#supported-urls).
+```bash
 tapeworm LIBRARY download
-
-# Optionally, tag and deposit the downloaded files
-tapeworm LIBRARY tag # extract more tags from "title"
-tapeworm LIBRARY deposit # organize into a target folder
 ```
 
-If you add a URL from a [scraping supported site](#supported-websites-for-scraping), tapeworm will scrape that page to find song information and add that as a `ytsearch` query to the library.
+#### yt-dlp.conf
 
-Downloading the library will first download each input (whether URL or query), and may then process the downloaded files further, e.g. tagging audio files.
+This file specifies [yt-dlp options](https://github.com/yt-dlp/yt-dlp) for download, extraction, post-processing, etc. When this file is not present, the result will be the same as when invoking yt-dlp without any options (resulting in disorganized downloads).
 
-If you want to use tapeworm merely for tagging and/or organizing files, see the following minimal example setup and usage:
+> :warning: Files are downloaded to the directory where `tapeworm LIBRARY download` was invoked, *unless* yt-dlp.conf specifies differently in e.g. the `-P` or `-o` option (see [yt-dlp](https://github.com/yt-dlp/yt-dlp))
 
-```sh
-tapeworm LIBRARY tag # `INPUT_DIR` should be set, and have some files in it
-tapeworm LIBRARY deposit # Both `INPUT_DIR` and `TARGET_DIR` should be set
+### :link: Tagging
+
+> :warning: `tag` only works on files in the `INPUT_DIR`, not files in subfolders. So `yt-dlp.conf` should not specify subfolders (of `INPUT_DIR`) in the `-P` or `-o` options, if you want it to work with this commands.
+
+> :warning: Tagging only works with [audiotags' supported formats](https://docs.rs/audiotags/latest/audiotags/#supported-formats)
+
+The `tag` command exploits the information often contained in an uploaded video title. For example, the title `Artist ft. Singer - Song (2024) [Instrumental]` would result in tags:
+```
+ARTIST=Artist;Singer
+TITLE=Song [Instrumental]
+YEAR=2024
+```
+`tag` also changes the title and filename to standardized formats, see [configuration](#wrench-configuration).
+
+`tag` uses the `title` tag, so make sure that your library's `yt-dlp.conf` specifies metadata settings:
+```
+# Required: embed the metadata. This sets the title by default
+--embed-metadata
+
+# If needed, modify your (title) metadata with --parse-metadata or --replace-metadata
+```
+For a more worked out version, see the [music library example](#music-library-with-tagging).
+
+> :information_source: If you have metadata options in `yt-dlp.conf` these are always applied (during `download`). Tagging only acts as an additional processing step ("extracting tags from the tags")
+
+> :warning: If you want to use `download` and `tag` (and possibly `deposit`) together, the `INPUT_DIR` in `lib.conf` should match the path where yt-dlp outputs to, see [yt-dlp.conf](#yt-dlp.conf) and [configuration](#wrench-configuration)
+
+### :link: Organization
+
+> :warning: `deposit` only moves files in the `INPUT_DIR`, not folders. So `yt-dlp.conf` should not specify subfolders (of `INPUT_DIR`) in the `-P` or `-o` options, if you want it to work with this commands.
+
+The `deposit` command organizes files into a target directory. There are three modes available.
+
+#### Drop (no organization)
+
+```bash
+tapeworm LIBRARY deposit -i "path/to/downloads" -o "path/to/organize/into"
+tapeworm LIBRARY deposit -i "path/to/downloads" -o "path/to/organize/into" -d DROP
+```
+By default, `deposit` will simply drop files into the target directory:
+```
+TARGET_DIR/99.mp3
+TARGET_DIR/Artist - Painting.png
+TARGET_DIR/hello.mp3
+TARGET_DIR/painting.jpg
+TARGET_DIR/Song.mp3
+TARGET_DIR/Song from album.mp3
 ```
 
-### Configuration
+#### Alphabetical organization
 
-The library configuration determines the behavior of each tapeworm command.
+```bash
+tapeworm LIBRARY deposit -i "path/to/downloads" -o "path/to/organize/into" -d A-Z
+```
+This organization mode will move files to alphabetic subfolders `TARGET_DIR/A-Z/ARTIST?/ALBUM?/FILENAME.EXT` (note that `ALBUM` is not relevant for image files):
+```
+TARGET_DIR/0-9#/99.mp3
+TARGET_DIR/A/Artist/Artist - Painting.jpg
+TARGET_DIR/B/Band/Song.mp3  # has "Band" ARTIST tag
+TARGET_DIR/B/Band/Album/Song from album.mp3  # has ARTIST "Band" and ALBUM "Album"
+TARGET_DIR/H/hello.mp3
+TARGET_DIR/P/painting.jpg
+```
 
-The config directory shall refer to one of the following paths (depending on your system):
+#### Chronological organization
 
-- Unix: `/home/USER/.config/tapeworm/LIBRARY/`
-- Windows: `/c/Users/USER/AppData/Roaming/tapeworm/LIBRARY/`
+```bash
+tapeworm LIBRARY deposit -i "path/to/downloads" -o "path/to/organize/into" -d DATE
+```
+This mode will move files to dated subfolders `TARGET_DIR/YYYY/MM/FILENAME.EXT`:
+```
+TARGET_DIR/2024/04/painting.jpg
+TARGET_DIR/2024/05/hello.mp3
+...
+```
+This organization mode is aimed at photographs, but does of course work with any files / library.
 
-tapeworm will try to find the following files in this directory:
+### :chains: Processing
 
-- **lib.conf**: library settings
-- **input.txt**: search queries and/or URLs
-- **yt-dlp.conf**: yt-dlp options
+If a library is intended to use multiple commands in a certain order, `process` is provided to simplify the interaction with the library. Instead of manually executing each command, a list of commands can be configured. These are then executed in the specified order each time `process` is invoked.
+```bash
+tapeworm LIBRARY process -s download,tag
+```
 
-Note that **input.txt** and **yt-dlp.conf** are only needed if you intend to use the library for downloading.
+> :information_source: `process` only accepts the following processing steps: `download`, `tag`, `deposit`
 
-Removing the `tapeworm/LIBRARY` folder is all that is needed to remove the library from tapeworm's control. **Caution:** if you also downloaded files here, you might not want to delete those.
+## :wrench: Configuration
 
-#### lib.conf
+How a library uses tapeworm's commands can be configured in the `lib.conf` file. This file specifies settings in newline-separated `name=value` pairs. If not present, the following defaults are used:
 
-This specifies library settings, in newline-separated `name=value` pairs. If this file is not present, these defaults listed below are used. The **Command** column indicates which command(s) use that setting.
-
-| Setting | Default | Command | Description |
+| Setting name | Default value | Applicable command | Description |
 |:-|:-|:-|:-|
 | CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
 | CONFIRM_DOWNLOADS | false | `download` | By default, `download` will simply exit when done, and all downloaded files are kept. If this setting is enabled however, the user will be asked to confirm or delete each downloaded file. E.g. this option comes in useful when downloading from queries, as the results can be different than expected. |
@@ -99,76 +186,37 @@ This specifies library settings, in newline-separated `name=value` pairs. If thi
 | TITLE_TEMPLATE | `{title} ({feat}) [{remix}]` | `tag` | The original title is formatted according to this template. See [Tag format](#tag-format). |
 | VERBOSE | false | any | Show verbose output |
 
-##### Tag format
+#### Tag format
 
-Tag names are surrounded by `{}` and may consist of uppercase or lowercase letters and _ only. Valid tag names are: album, album_artist, track, title, artist (main artist), feat (remaining artists), remix, year, genre. The actual tag values are substituted in, and any other characters will show up as is. If a tag has no value, nothing will be substituted in. Extra spaces are trimmed and empty brackets are removed.
+A tag name must be one of the following (uppercase is allowed):
 
-##### Organization modes
+- **album**
+- **album_artist**
+- **artist** (main artist)
+- **feat** (remaining artists)
+- **genre**
+- **remix**
+- **title**
+- **track**
+- **year**
 
-Without specifying `ORGANIZE` (or specifying `ORGANIZE=DROP`), files are moved as follows:
+The tag name must be surrounded by `{}`. Actual tag values are substituted in, and any other characters (outside `{}`) will show up as is. If a tag has no value, the tag is omitted in its entirety. Examples:
 ```
-TARGET_DIR/99.mp3
-TARGET_DIR/Artist - Painting.png
-TARGET_DIR/hello.mp3
-TARGET_DIR/painting.jpg
-TARGET_DIR/Song.mp3
-TARGET_DIR/Song from album.mp3
-```
-With `ORGANIZE=A-Z` files will be moved to alphabetic subfolders `TARGET_DIR/A-Z/ARTIST?/ALBUM?/FILENAME.EXT` (note that ALBUM is not relevant for image files):
-```
-TARGET_DIR/0-9#/99.mp3
-TARGET_DIR/A/Artist/Artist - Painting.jpg
-TARGET_DIR/B/Band/Song.mp3  # has "Band" ARTIST tag
-TARGET_DIR/B/Band/Album/Song from album.mp3  # has ARTIST "Band" and ALBUM "Album"
-TARGET_DIR/H/hello.mp3
-TARGET_DIR/P/painting.jpg
-```
-With `ORGANIZE=DATE` files will be moved to dated subfolders `TARGET_DIR/YYYY/MM/FILENAME.EXT`:
-```
-TARGET_DIR/2024/04/painting.jpg
-TARGET_DIR/2024/05/hello.mp3
-...
-```
-This organization mode is aimed at photographs, but does of course work with any files / library.
+# Format
+{artist} - {title} ({feat}) [{year}]
 
-Keep in mind that only files are moved, not subfolders of `INPUT_DIR`. So you cannot specify subfolders in yt-dlp's `-P` or `-o` options, if you want it to work with `tag` and/or `deposit` commands.
-
-#### input.txt
-
-This file is created the first time `tapeworm LIBRARY add URL|TERM...` is issued. Each line is treated as a separate URL or query. Note that `TERM...` is added as a YouTube search query.
-
-Example:
-```sh
-tapeworm LIBRARY add song  # add a query
-tapeworm LIBRARY add "the artist - a song"  # add a query
-tapeworm LIBRARY add https://youtube.com/watch?v=123  # add a URL
-```
-The file now contains:
-```
-ytsearch:song
-ytsearch:the artist - a song
-https://youtube.com/watch?v=123
+# Input tags -> Output string
+artist=A,title=Song,year=2024 -> "A - Song [2024]"
+artist=A,title=Song           -> "A - Song"
+artists=A;B;C,title=Song      -> "A - Song (B & C)
 ```
 
-#### yt-dlp.conf
+## :bulb: Examples
 
-This specifies download options for yt-dlp, see [yt-dlp](https://github.com/yt-dlp/yt-dlp) for valid options. When this file is present, tapeworm will invoke yt-dlp as:
-```
-yt-dlp --config-location ~/.config/tapeworm/LIBRARY/yt-dlp.conf [URL...]  # URLs read from input.txt
-```
-When this file is not present, tapeworm will invoke yt-dlp as:
-```
-yt-dlp [URL...]  # URLs read from input.txt
-```
-
-Note that files are downloaded to the directory where `tapeworm` was invoked, *unless* yt-dlp.conf specifies differently in e.g. the `-P` or `-o` option (see [yt-dlp](https://github.com/yt-dlp/yt-dlp)).
-
-Also note that if you want to use the tagging/depositing feature, the `INPUT_DIR` in `lib.conf` should match the path where yt-dlp downloads to.
-
-### Examples
+### Minimal downloading setup
 
 Setup a library for downloading songs:
-```sh
+```bash
 mkdir ~/.config/tapeworm/song
 cd ~/.config/tapeworm/song
 echo "CLEAR_INPUT=true" > lib.conf # empty input.txt when done
@@ -182,8 +230,57 @@ tapeworm song add "the artist - a song"
 tapeworm song download
 ```
 
-Setup music library with tagging. The Music folder only contains properly processed (tagged) files, and `LIBRARY/tmp` is used as temporary storage for downloads.
-```sh
+### Music library
+
+tapeworm was originally conceived to be used as a YouTube music downloader, tagger, and organizer. The minimal setup for this:
+```bash
+# Create the "music" library by recording a query
+tapeworm music add song  # records 'ytsearch:song'
+tapeworm music add "the artist - a song"  # records 'ytsearch:the artist - a song'
+tapeworm music add https://youtube.com/watch?v=123  # records the URL
+
+# Download all URLs/queries
+tapeworm music download
+
+# Optionally, tag and deposit the downloaded files
+tapeworm music tag # extract more tags from "title"
+tapeworm music deposit # organize into a target folder
+```
+Note that each processing step is executed manually. To automate this further, setup a processing pipeline:
+```bash
+echo "STEPS=download,tag,deposit" >> ~/.config/tapeworm/music/lib.conf
+tapeworm process music
+
+# To fully automate processing, make sure that:
+echo "CONFIRM_DOWNLOADS=false" >> path/to/lib.conf  # is already 'false' by default
+# TODO add other user input bypass options
+```
+
+### Audio tagger
+
+Use tapeworm exclusively to tag audio files.
+```bash
+echo "INPUT_DIR=path/to/files" >> ~/.config/tapeworm/LIBRARY/lib.conf
+
+tapeworm LIBRARY tag
+```
+> :warning: If you don't setup `TARGET_DIR` and a `deposit` step, the files in `INPUT_DIR` are not moved, and `tag` will keep considering those files when invoked
+
+### File organizer
+
+Use tapeworm exclusively to organize a file dump into subfolders. Each time `deposit` is called, files from the `INPUT_DIR` are organized into the `TARGET_DIR`.
+```bash
+echo "INPUT_DIR=path/to/files" >> ~/.config/tapeworm/LIBRARY/lib.conf
+echo "TARGET_DIR=where/to/organize/files/to" >> ~/.config/tapeworm/LIBRARY/lib.conf
+echo "ORGANIZE=A-Z" >> ~/.config/tapeworm/LIBRARY/lib.conf
+
+tapeworm LIBRARY deposit
+```
+
+### Music library with tagging
+
+The Music folder only contains properly processed (tagged) files, and `LIBRARY/tmp` is used as temporary storage for downloads.
+```bash
 mkdir ~/.config/tapeworm/music
 cd ~/.config/tapeworm/music
 echo "CLEAR_INPUT=true" >> lib.conf # empty input.txt when done
@@ -201,10 +298,8 @@ tapeworm music deposit # to move them into TARGET_DIR
 echo "STEPS=download,tag,deposit" >> lib.conf
 tapeworm music process
 ```
-For tagging to work, the following yt-dlp.conf setup is required:
+With the following `yt-dlp.conf`:
 ```
-# If needed, modify your metadata with --parse-metadata or --replace-metadata
-# Required: embed the metadata. The title is set by default - you can modify it, but make sure it is set to something if you actually want the tagger to do something
 --embed-metadata
 
 # Add your other options, e.g. extraction and format, etc
@@ -213,8 +308,9 @@ For tagging to work, the following yt-dlp.conf setup is required:
 ...
 ```
 
-Setup a library for archiving youtube channels:
-```sh
+### YouTube channel archiver
+
+```bash
 mkdir ~/.config/tapeworm/mychannels
 cd ~/.config/tapeworm/mychannels
 touch archive.txt
@@ -227,40 +323,25 @@ echo "https://www.youtube.com/c/MyGamingChannel/videos" >> input.txt
 tapeworm mychannels download # call this every once in a while
 ```
 
+### Photograph collection
+
 You can also use tapeworm without the downloading/tagging features, and exploit its filesystem organization capabilities. See this example for a library of pictures, where each picture's filename has to be formatted like `ARTIST - TITLE`, the artist can of course also be a source or event:
-```sh
+```bash
 mkdir pics
 echo "STEPS=deposit" >> lib.conf
 echo "INPUT_DIR=tmp" >> lib.conf # dir to put images in
-echo "TARGET_DIR=/home/USER/Pictures" >> lib.conf # dir to sort images into
+echo "TARGET_DIR=/home/<USER>/Pictures" >> lib.conf # dir to sort images into
 echo "ORGANIZE=A-Z" >> lib.conf
 
 # Put some picture files in the folder
 mv ~/Downloads/artist-painting.jpg tmp
 mv ~/Downloads/dog.jpg tmp
-mv "~/Downloads/France holiday 2024 - beach.png" tmp
+mv "~/Downloads/Holiday 2024 - beach.png" tmp
 
 # Sort the pictures into the target directory
 tapeworm pics process
 # Pictures are now in:
 # Pictures/A/artist/artist-painting.jpg
 # Pictures/D/dog.jpg
-# Pictures/F/France holiday 2024/France holiday 2024 - beach.png
+# Pictures/H/Holiday 2024/Holiday 2024 - beach.png
 ```
-
-## Tagging
-
-> NB: Tagging only works with the formats that the [audiotags](https://docs.rs/audiotags/latest/audiotags/#supported-formats) crate supports.
-
-The tagging feature exploits the information often contained in an uploaded video title, for example: `The Band ft. Artist - A Song (2000) [Instrumental]`. In order for this to work, make sure your `yt-dlp.conf` is set up with metadata options. The tagger uses the `title` metadata, so at least that field should be set (setting `--embed-metadata` is enough for this). See the music library example under [Examples](#examples).
-
-The tagging feature also changes the filename to a standardized format: `ARTIST - TITLE (FEAT...)? [REMIX]?`.
-
-Note that if you have metadata options in `yt-dlp.conf` these are always applied, enabling or disabling tagging does not change that. Tagging only acts as an additional processing step.
-
-## Supported websites for scraping
-
-The following websites can currently be scraped:
-
-- Spotify playlists
-
