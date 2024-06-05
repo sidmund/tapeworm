@@ -182,7 +182,12 @@ impl Config {
                     'c' if self.command == "download" || self.command == "process" => {
                         self.clear_input = true;
                     }
-                    't' if self.command == "tag" => self.auto_tag = true,
+                    'a' if self.command == "download" || self.command == "process" => {
+                        self.auto_download = true;
+                    }
+                    't' if self.command == "tag" || self.command == "process" => {
+                        self.auto_tag = true
+                    }
                     'i' if self.command == "tag"
                         || self.command == "deposit"
                         || self.command == "process" =>
@@ -266,7 +271,9 @@ impl Config {
         } else if ["download", "tag", "deposit", "process"].contains(&config.command.as_str()) {
             config.build_lib_conf_options()?; // override defaults with lib.conf
             config.parse_cli_options(args)?; // override defaults/lib.conf with CLI
-            config.require_input_dir()?;
+            if config.command != "download" {
+                config.require_input_dir()?;
+            }
         }
 
         if config.command.as_str() == "deposit" {

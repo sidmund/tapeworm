@@ -79,9 +79,9 @@ fn download(lib: &str, clear_input: bool) {
 
     // Wait for download
     let config = if clear_input {
-        setup(vec![lib, "download", "-c"]).unwrap()
+        setup(vec![lib, "download", "-ac"]).unwrap()
     } else {
-        setup(vec![lib, "download"]).unwrap()
+        setup(vec![lib, "download", "-a"]).unwrap()
     };
     let lib_path = config.lib_path.clone().unwrap();
     let input_path = config.input_path.clone().unwrap();

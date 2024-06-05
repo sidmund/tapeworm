@@ -78,6 +78,7 @@ COMMANDS
 
         OPTIONS
         -c      Clear the input file after scraping
+        -a      Automatically keep downloads (no confirmation prompt)
 
     LIBRARY tag [OPTIONS]
         Tag all downloaded files in the directory specified by INPUT_DIR
