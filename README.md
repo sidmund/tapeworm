@@ -174,8 +174,9 @@ How a library uses tapeworm's commands can be configured in the `lib.conf` file.
 
 | Setting name | Default value | Applicable command | Description |
 |:-|:-|:-|:-|
-| AUTO_TAG | false | `tag` | Write discovered tags without confirmation or possibility to edit |
 | AUTO_DOWNLOAD | false | `download` | By default, `download` will ask the user to confirm or delete each downloaded file. Enable this setting to automatically keep all downloads. Manual confirmation may come in useful when downloading from queries, as the results can be different than expected. |
+| AUTO_OVERWRITE | false | `deposit` | By default, if a file with the same name is already present in the `TARGET_DIR`, `deposit` will ask whether to overwrite. With this option enabled, it will always overwrite |
+| AUTO_TAG | false | `tag` | Write discovered tags without confirmation or possibility to edit |
 | CLEAR_INPUT | false | `download` | Clear input.txt after downloading |
 | DESCRIPTION | | `show` | Description of the library, used for informational purposes |
 | FILENAME_TEMPLATE | `{artist} - {title}` | `tag` | Files will be formatted according to this template. See [Tag format](#tag-format). In this case, the `title` refers to the title as formatted by `TITLE_TEMPLATE`. Note that the extension should not be specified. |
@@ -253,9 +254,9 @@ echo "STEPS=download,tag,deposit" >> ~/.config/tapeworm/music/lib.conf
 tapeworm process music
 
 # To fully automate processing, make sure to enable:
-echo "AUTO_TAG=true" >> path/to/lib.conf
 echo "AUTO_DOWNLOAD=true" >> path/to/lib.conf
-# TODO add other user input bypass options
+echo "AUTO_OVERWRITE=true" >> path/to/lib.conf
+echo "AUTO_TAG=true" >> path/to/lib.conf
 ```
 
 ### Audio tagger

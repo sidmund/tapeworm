@@ -43,6 +43,7 @@ pub struct Config {
     // Deposit options
     pub organize: DepositMode,
     pub target_dir: Option<PathBuf>,
+    pub auto_overwrite: bool,
 
     // Process options
     pub steps: Option<Vec<String>>,
@@ -155,6 +156,7 @@ impl Config {
                 // Deposit
                 "target_dir" => self.target_dir = Some(PathBuf::from(value)),
                 "organize" => self.organize = DepositMode::from(value)?,
+                "auto_overwrite" => self.auto_overwrite = value.parse::<bool>()?,
                 // Process
                 "steps" => self.steps = Some(value.split(',').map(String::from).collect()),
                 _ => return Err(format!("Invalid config option: {}", key).into()),

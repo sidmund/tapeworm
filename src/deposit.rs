@@ -8,8 +8,6 @@ use std::fs;
 use std::io::BufRead;
 use std::path::PathBuf;
 
-type BuildTargetFunction = fn(&PathBuf, &PathBuf) -> types::PathBufResult;
-
 #[derive(Debug, PartialEq)]
 pub enum DepositMode {
     /// Sort files into `A-Z/ARTIST?/ALBUM?` subfolders
@@ -36,7 +34,7 @@ impl DepositMode {
         }
     }
 
-    fn func(&self) -> BuildTargetFunction {
+    fn func(&self) -> fn(&PathBuf, &PathBuf) -> types::PathBufResult {
         match self {
             Self::AZ => alphabetical,
             Self::Date => chronological,
@@ -55,7 +53,7 @@ pub fn run<R: BufRead>(config: &Config, reader: R) -> types::UnitResult {
     }
     let target_dir = util::guarantee_dir_path(config.target_dir.clone().unwrap())?;
 
-    if let Some(errors) = deposit(target_dir, downloads, config.organize.func(), reader) {
+    if let Some(errors) = deposit(config, target_dir, downloads, reader) {
         Err(format!(
             "Could not move {} files to target directory:{}",
             errors.len(),
@@ -147,13 +145,14 @@ fn drop(target_dir: &PathBuf, file: &PathBuf) -> types::PathBufResult {
 }
 
 fn deposit<R: BufRead>(
+    config: &Config,
     target_dir: PathBuf,
     downloads: Vec<PathBuf>,
-    func: BuildTargetFunction,
     mut reader: R,
 ) -> types::OptionVecString {
     println!("Moving files to {}...", target_dir.display());
 
+    let func = config.organize.func();
     let mut errors = Vec::new();
 
     for entry in downloads {
@@ -170,7 +169,7 @@ fn deposit<R: BufRead>(
         }
         let target = target.unwrap();
 
-        if !overwrite(&target, &mut reader) {
+        if !config.auto_overwrite && !overwrite(&target, &mut reader) {
             println!("  Skipping {}", entry.display());
             continue;
         }
