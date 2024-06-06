@@ -1,5 +1,3 @@
-//! Utility functions.
-
 use crate::types;
 use std::fs;
 use std::io::{BufRead, Write};
@@ -67,16 +65,15 @@ pub fn select<R: BufRead>(
         return Err("Must specify at least one option".into());
     }
 
-    let mut question = String::from(prompt);
-    question.push(' ');
+    let mut question = format!("{} ", prompt);
     let mut info = String::new();
     for option in &options {
-        if &default == option {
+        if default == *option {
             question = question + &format!("{}/", option).to_uppercase();
         } else {
             question = question + &format!("{}/", option);
         }
-        info = info + &format!("{}, ", option.info());
+        info = format!("{}{}, ", info, option.info());
     }
     question.pop(); // Remove trailing '/'
     info.pop(); // Remove trailing ' '
@@ -156,8 +153,7 @@ pub fn parse<F: FromStr>(value: Option<String>) -> Result<Option<F>, Box<dyn std
 
 /// Remove a string in its entirety from another string.
 pub fn remove_str_from_string(s: String, to_remove: &str) -> String {
-    let without = s.split(to_remove).fold(String::new(), |acc, s| acc + s);
-    String::from(without.trim())
+    String::from(s.split(to_remove).fold(String::new(), |a, s| a + s).trim())
 }
 
 /// Remove leading and trailing brackets.
