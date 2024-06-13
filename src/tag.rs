@@ -21,27 +21,54 @@ impl TagExtractor {
     fn new(verbose: bool) -> Self {
         Self {
             artist_separator: Regex::new(
-                r"(?i)(\s(x|and)\s|(^|\s)(feat(uring|\.)?|ft\.?|w[⧸/])|&|,|，)",
+                r"(?ix) ( \s(x|and)\s | (^|\s) (feat(uring|\.)? | ft\.? | w[⧸/] ) | & | , | ， )",
             )
             .unwrap(),
             title_formats: vec![
-                // 「GENRE」[ARTISTS] TITLE
-                Regex::new(r"^「(?<genre>[^」]+)」\[(?<artists>[^\]]+)\]\s(?<title>.+)$").unwrap(),
-                // ARTISTS 'TITLE'EXTRA?
-                Regex::new(r"^(?<artists>[^'‘]+)\s['‘](?<title>[^'’]+)['’](?<extra>.+)?$").unwrap(),
-                // TRACK.? ARTISTS - TITLE
-                Regex::new(r"^(?<track>\d+\.)?(?<artists>[^-_~｜]+)[-_~｜](?<title>.+)$")
-                    .unwrap(),
+                Regex::new(
+                    // 「GENRE」[ARTISTS] TITLE
+                    r"(?x) ^ 「 (?<genre> [^」]+) 」\[ (?<artists> [^\]]+) \] \s (?<title> .+) $",
+                )
+                .unwrap(),
+                Regex::new(
+                    // ARTISTS 'TITLE'EXTRA?
+                    r"(?x) ^ (?<artists> [^'‘]+) \s ['‘] (?<title> [^'’]+) ['’] (?<extra> .+)? $",
+                )
+                .unwrap(),
+                Regex::new(
+                    // TRACK.? ARTISTS - TITLE
+                    r"(?x) ^ (?<track> \d+\.)? (?<artists> [^-_~｜]+) [-_~｜] (?<title> .+) $",
+                )
+                .unwrap(),
             ],
             catch_all: Regex::new(
-        r"(?xi)
-        (?<feat>\((\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\)]*\)|(\sand\s|feat(uring|\.)?|ft\.?|w[⧸/])[^\(\)]*) |
-        (?<year>\(\d{4}\)|\d{4}) |
-        (?<remix>[\[(][^\[\]()]*(cut|edit|extend(ed)?(\smix)?|(re)?mix|remaster|bootleg|instrumental)[^\[\]()]*[\])]) |
-        (?<album>[\[\(【][^\[\]\(\)【】]*(?<album_rmv>F\WC)[^\[\]\(\)【】]*[\]\)】]) |
-        (?<strip>lyrics|[\[(][^\[\]()]*(lyrics|full\sversion|(official\s)?((music\s)?video|audio)|m/?v|hq|hd)[^\[\]()]*[\])])
+                r"(?ix)
+        (?<feat>
+            \( (\sand\s | feat(uring|\.)? | ft\.? | w[⧸/]) [^\)]* \) |
+            (\sand\s | feat(uring|\.)? | ft\.? | w[⧸/]) [^\(\)]*
+        ) |
+        (?<year>
+            \( \d{4} \) | \d{4}
+        ) |
+        (?<remix>
+            [\[(] [^\[\]()]*
+                (cut | edit | extend(ed)?(\smix)? | (re)?mix | remaster | bootleg | instrumental)
+            [^\[\]()]* [\])]
+        ) |
+        (?<album>
+            [\[\(【] [^\[\]\(\)【】]*
+                (?<album_rmv> F\WC)
+            [^\[\]\(\)【】]* [\]\)】]
+        ) |
+        (?<strip>
+            lyrics |
+            [\[(] [^\[\]()]*
+                (lyrics | full\sversion | (official\s)?((music\s)?video|audio) | m/?v | hq | hd)
+            [^\[\]()]* [\])]
+        )
         ",
-            ).unwrap(),
+            )
+            .unwrap(),
             verbose,
         }
     }
@@ -118,15 +145,18 @@ impl TagExtractor {
             if let Some(genre) = tags.get("genre") {
                 proposal.genre = Some(genre.to_string());
             }
+
             if let Some(track) = tags.get("track") {
                 let track = track.to_string();
                 title = util::remove_str_from_string(title, &track);
                 let track = String::from(&track[..track.len() - 1]); // Omit "."
                 proposal.track = track.parse::<u16>().ok();
             }
+
             if let Some(artists) = tags.get("artists") {
                 proposal.feature(self.separate(artists));
             }
+
             let rest_title = tags.get("title");
             let extra = tags.get("extra").unwrap_or(&"");
             if let Some(rest_title) = rest_title {
@@ -525,12 +555,12 @@ mod tests {
     }
 
     #[test]
-    fn parses_spacing() {
+    fn parses_separator() {
         let r = TagExtractor::new(true);
         check(&r, "Band - Song", song!("Band", "Song"));
-        check(&r, "Band- Song", song!("Band", "Song"));
-        check(&r, "Band -Song", song!("Band", "Song"));
-        check(&r, "Band-Song", song!("Band", "Song"));
+        check(&r, "Band _ Song", song!("Band", "Song"));
+        check(&r, "Band ~ Song", song!("Band", "Song"));
+        check(&r, "Band ｜ Song", song!("Band", "Song"));
     }
 
     #[test]
