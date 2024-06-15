@@ -4,14 +4,12 @@ use crate::{scrape, types, util, Config};
 use url::Url;
 
 /// Attempts to append all terms to the input file.
-/// The library folder and input file are created if they do not exist.
+/// The input file is created if it does not exist.
 pub fn run(config: &Config) -> types::UnitResult {
-    util::guarantee_dir_path(config.lib_path.clone().unwrap())?;
     util::append(
         config.input_path.as_ref().unwrap(),
         format!("{}\n", parse(config.terms.as_ref().unwrap())), // \n needed for next append
-    )?;
-    Ok(())
+    )
 }
 
 fn parse(terms: &Vec<String>) -> String {

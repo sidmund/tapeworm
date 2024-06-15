@@ -9,15 +9,17 @@ mod types;
 mod util;
 
 use crate::deposit::DepositMode;
-use std::fs;
+use std::collections::HashMap;
 use std::io::BufRead;
 use std::path::PathBuf;
+use std::{env, fs};
 
 #[derive(Debug, Default)]
 pub struct Config {
     pub command: String,
-    pub library: Option<String>,
+    pub lib_alias: Option<String>,
     pub lib_desc: Option<String>,
+    pub aliases: HashMap<String, PathBuf>,
 
     // Paths
     pub lib_path: Option<PathBuf>,
@@ -62,10 +64,75 @@ impl Config {
         let arg = arg.unwrap();
         match arg.as_str() {
             "help" | "h" | "-h" | "--help" => return Ok(()), // 'help' is default
-            "list" | "ls" | "l" => self.command = String::from("list"),
+            "list" | "ls" | "l" => {
+                self.command = String::from("list");
+                self.parse_general_config()?;
+            }
+            "show" | "add" | "download" | "tag" | "deposit" | "process" => {
+                // Invoked as `tapeworm COMMAND [OPTIONS]`
+                self.command = arg;
+                self.setup_library(None)?;
+            }
             _ => {
+                // Invoked as `tapeworm LIBRARY [COMMAND] [OPTIONS]`
+                // Default to `show` command when only the LIBRARY was given
                 self.command = args.next().unwrap_or(String::from("show"));
-                self.setup_library(arg)?;
+                self.setup_library(Some(arg))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Parse extra options for commands that require them.
+    fn parse_extra_options(&mut self, args: impl Iterator<Item = String>) -> types::UnitResult {
+        // Parse / build parameters
+        if self.command == "add" {
+            self.parse_terms(args)?;
+        } else if self.command == "show" {
+            self.build_lib_conf_options()?; // just load the library settings
+        } else if ["download", "tag", "deposit", "process"].contains(&self.command.as_str()) {
+            self.build_lib_conf_options()?; // override defaults with lib.conf
+            self.parse_cli_options(args)?; // override defaults/lib.conf with CLI
+        }
+
+        // Enforce parameter requirements
+        let mut needs_input_dir = self.command == "tag" || self.command == "deposit";
+        if self.command == "process" {
+            self.require_steps()?;
+            let steps = self.steps.as_ref().unwrap();
+            if steps.contains(&String::from("tag")) || steps.contains(&String::from("deposit")) {
+                needs_input_dir = true;
+            }
+        }
+        if needs_input_dir {
+            self.require_input_dir()?;
+        }
+        if self.command == "deposit" {
+            self.require_target_dir()?;
+        }
+        Ok(())
+    }
+
+    /// Read in the configured aliases.
+    fn parse_general_config(&mut self) -> types::UnitResult {
+        let config_file = PathBuf::from(dirs::config_dir().unwrap())
+            .join("tapeworm")
+            .join("tapeworm.conf");
+
+        if let Some(contents) = fs::read_to_string(config_file).ok() {
+            for line in contents.lines().map(|l| l.trim()) {
+                if line.is_empty() || line.starts_with("#") {
+                    continue;
+                }
+
+                let alias = line.split_once("=");
+                if alias.is_none() {
+                    return Err(format!("Invalid alias: {}", line).into());
+                }
+
+                let (aka, path) = alias.unwrap();
+                self.aliases.insert(String::from(aka), PathBuf::from(path));
             }
         }
 
@@ -77,27 +144,36 @@ impl Config {
     /// # Errors
     /// When the library folder is not found. This applies to every library command, except `add`, which will
     /// create it.
-    fn setup_library(&mut self, library: String) -> types::UnitResult {
-        let lib_path = PathBuf::from(dirs::config_dir().unwrap())
-            .join("tapeworm")
-            .join(library.clone());
+    fn setup_library(&mut self, library: Option<String>) -> types::UnitResult {
+        self.parse_general_config()?;
 
-        if self.command != "add" && fs::metadata(&lib_path).is_err() {
-            return Err(format!("Library not found: {}", lib_path.to_str().unwrap()).into());
+        let lib_path = if let Some(library) = library {
+            // Assume 'library' to be an alias pointing to the library path,
+            // else assume 'library' to be the library path itself
+            if let Some(lib_path) = self.aliases.get(&library) {
+                self.lib_alias = Some(library);
+                lib_path.clone()
+            } else {
+                env::current_dir()?.join(library)
+            }
+        } else {
+            // Assume current directory to be a library
+            env::current_dir()?
+        };
+
+        let lib_conf_folder = lib_path.join(".tapeworm");
+        if fs::metadata(&lib_conf_folder).is_err() {
+            return Err(format!("Not a library folder: {}", lib_path.to_str().unwrap()).into());
         }
 
-        let mut lib_conf_path = lib_path.join("lib");
-        lib_conf_path.set_extension("conf");
-        let mut input_path = lib_path.join("input");
-        input_path.set_extension("txt");
-        let mut yt_dlp_conf_path = lib_path.join("yt-dlp");
-        yt_dlp_conf_path.set_extension("conf");
+        self.lib_conf_path = Some(lib_conf_folder.join("lib.conf"));
+        self.input_path = Some(lib_conf_folder.join("input.txt"));
+        self.yt_dlp_conf_path = Some(lib_conf_folder.join("yt-dlp.conf"));
 
-        self.library = Some(library);
+        self.input_dir = Some(lib_conf_folder.join("tmp"));
+        self.target_dir = Some(lib_path.clone());
+
         self.lib_path = Some(lib_path);
-        self.lib_conf_path = Some(lib_conf_path);
-        self.input_path = Some(input_path);
-        self.yt_dlp_conf_path = Some(yt_dlp_conf_path);
 
         Ok(())
     }
@@ -222,6 +298,21 @@ impl Config {
         Ok(())
     }
 
+    /// Require and validate steps.
+    fn require_steps(&self) -> types::UnitResult {
+        if self.steps.is_none() {
+            return Err("No processing steps specified. See 'help'".into());
+        }
+
+        let whitelist = ["download", "tag", "deposit"];
+        for step in self.steps.as_ref().unwrap() {
+            if !whitelist.contains(&step.as_str()) {
+                return Err(format!("Unsupported processing step '{}'. See 'help'", step).into());
+            }
+        }
+        Ok(())
+    }
+
     fn require_input_dir(&mut self) -> types::UnitResult {
         if self.input_dir.is_none() {
             return Err("Input directory not specified. See 'help'".into());
@@ -252,55 +343,30 @@ impl Config {
         Ok(())
     }
 
-    pub fn build(mut args: impl Iterator<Item = String>) -> types::ConfigResult {
-        args.next(); // Consume program name
-
-        let mut config = Config {
+    fn default() -> Config {
+        Config {
             command: String::from("help"),
             title_template: String::from("{title} ({feat}) [{remix}]"),
             filename_template: String::from("{artist} - {title}"),
             ..Default::default()
-        };
+        }
+    }
+
+    pub fn build(mut args: impl Iterator<Item = String>) -> types::ConfigResult {
+        args.next(); // Consume program name
+
+        let mut config = Config::default();
         config.parse_library_and_command(&mut args)?;
-
-        // Parse extra options for commands that have them
-        if config.command == "add" {
-            config.parse_terms(args)?;
-        } else if config.command == "show" {
-            config.build_lib_conf_options()?; // just load the library settings
-        } else if ["download", "tag", "deposit", "process"].contains(&config.command.as_str()) {
-            config.build_lib_conf_options()?; // override defaults with lib.conf
-            config.parse_cli_options(args)?; // override defaults/lib.conf with CLI
-            if config.command != "download" {
-                config.require_input_dir()?;
-            }
-        }
-
-        if config.command.as_str() == "deposit" {
-            config.require_target_dir()?;
-        }
-
+        config.parse_extra_options(args)?;
         Ok(config)
     }
 
     fn steps(&self) -> Result<Vec<&String>, Box<dyn std::error::Error>> {
         if self.command.as_str() != "process" {
-            return Ok(vec![&self.command]);
+            Ok(vec![&self.command])
+        } else {
+            Ok(self.steps.as_ref().unwrap().iter().collect())
         }
-        if self.steps.is_none() {
-            return Err("No processing steps specified. See 'help'".into());
-        }
-
-        let steps = self.steps.as_ref().unwrap();
-        let mut commands = Vec::with_capacity(steps.len());
-        for step in steps {
-            if ["download", "tag", "deposit"].contains(&step.as_str()) {
-                commands.push(step);
-            } else {
-                return Err(format!("Unsupported processing step '{}'. See 'help'", step).into());
-            }
-        }
-        Ok(commands)
     }
 }
 
@@ -308,7 +374,7 @@ pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
     for command in &config.steps()? {
         match command.as_str() {
             "help" => info::help(),
-            "list" => info::list()?,
+            "list" => info::list(&config),
             "show" => info::show(&config)?,
             "add" => add::run(&config)?,
             "download" => download::run(&config, &mut reader)?,

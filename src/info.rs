@@ -3,12 +3,17 @@ use std::fs;
 
 /// Show the library's status and discovered config files.
 pub fn show(config: &Config) -> types::UnitResult {
-    print!("\n  {}", config.library.as_ref().unwrap());
-    if let Some(desc) = &config.lib_desc {
-        println!(": {}\n", desc);
-    } else {
-        println!();
+    println!(
+        "\n  Library at : {}",
+        config.lib_path.as_ref().unwrap().display()
+    );
+    if let Some(alias) = &config.lib_alias {
+        println!("  Aliased to : {}", alias);
     }
+    if let Some(desc) = &config.lib_desc {
+        println!("  Description: {}", desc);
+    }
+    println!();
 
     let input_path = config.input_path.as_ref().unwrap();
     if fs::metadata(input_path).is_ok() {
@@ -31,17 +36,13 @@ pub fn show(config: &Config) -> types::UnitResult {
     Ok(())
 }
 
-/// Print the list of libraries discovered in the tapeworm config directory.
-pub fn list() -> types::UnitResult {
-    if let Ok(libraries) = fs::read_dir(dirs::config_dir().unwrap().join("tapeworm")) {
-        for lib in libraries {
-            let lib = lib?;
-            if lib.path().is_dir() {
-                println!("{}", lib.file_name().to_str().unwrap());
-            }
-        }
+/// Print the list of aliases.
+pub fn list(config: &Config) {
+    println!("\n  ALIAS\t\tLIBRARY PATH");
+    for (alias, path) in &config.aliases {
+        println!("  {}\t\t{}", alias, path.display());
     }
-    Ok(())
+    println!();
 }
 
 pub fn help() {

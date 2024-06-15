@@ -7,143 +7,138 @@ use std::{fs, io::BufReader, path::PathBuf};
 
 #[test]
 fn runs_without_command_or_library() {
-    run(setup(vec![]).unwrap()).unwrap();
+    run(build(vec![]).unwrap()).unwrap();
 }
 
 #[test]
 fn runs_non_library_commands() {
     for cmd in ["help", "h", "-h", "--help", "list", "ls", "l"] {
-        run(setup(vec![cmd]).unwrap()).unwrap();
+        run(build(vec![cmd]).unwrap()).unwrap();
     }
 }
 
+/// Assumes that the test is not run inside a library folder (no `.tapeworm` subfolder)
 #[test]
 fn library_commands_fail_without_library() {
     for cmd in ["show", "add", "download", "tag", "deposit", "process"] {
-        assert!(setup(vec![cmd]).is_err());
+        assert!(build(vec![cmd]).is_err());
     }
 }
 
+/// Test that tapeworm fails when:
+/// - The alias does not exist
+/// - The library path does not exist
+/// - The library at the path does not have a ".tapeworm" config folder
 #[test]
 fn fails_with_non_existing_library() {
-    for cmd in ["show", "download", "tag", "deposit", "process"] {
-        let lib = format!("tw-test-{}-unexist", cmd);
-        assert!(setup(vec![&lib, cmd]).is_err());
-    }
-}
+    for cmd in ["show", "add", "download", "tag", "deposit", "process"] {
+        // Non-existing alias fails
+        let alias = format!("{}-not-an-alias", cmd);
+        assert!(build(vec![&alias, cmd]).is_err());
 
-#[test]
-fn add_fails_without_args() {
-    assert!(setup(vec!["add", "tw-test-aisy822rit"]).is_err());
+        // Just the base directory without a ".tapeworm" config folder should be an invalid library
+        let lib = Library::new().create_base_folder();
+        assert!(build(vec![lib.arg(), cmd]).is_err());
+
+        // Non-existing path fails
+        let lib = Library::new();
+        assert!(build(vec![lib.arg(), cmd]).is_err());
+    }
 }
 
 #[test]
 fn shows_library() {
-    let lib = "tw-test-show";
-    let lib_path = create_lib(lib);
-    run(setup(vec![lib]).unwrap()).unwrap();
-    run(setup(vec![lib, "show"]).unwrap()).unwrap();
-    destroy(lib_path);
+    let lib = Library::new().create_cfg_folder();
+    run(build(vec![lib.arg()]).unwrap()).unwrap();
+    run(build(vec![lib.arg(), "show"]).unwrap()).unwrap();
+}
+
+#[test]
+fn add_fails_without_args() {
+    let lib = Library::new().create_cfg_folder();
+    assert!(build(vec![lib.arg(), "add"]).is_err());
 }
 
 #[test]
 fn adds_to_library() {
-    let lib = "tw-test-add";
+    let lib = Library::new().create_in_out_folders();
     let url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
-    let config = setup(vec![lib, "add", url]).unwrap();
-    let lib_path = config.lib_path.clone().unwrap();
-    let input_path = config.input_path.clone().unwrap();
+    let config = build(vec![lib.arg(), "add", url]).unwrap();
+    let input_txt = config.input_path.clone().unwrap();
     run(config).unwrap();
-    run(setup(vec![lib, "add", "Darude Sandstorm"]).unwrap()).unwrap();
+    run(build(vec![lib.arg(), "add", "Darude Sandstorm"]).unwrap()).unwrap();
 
     assert_eq!(
         format!("{}\nytsearch:Darude Sandstorm\n", url),
-        read(input_path)
+        read(&input_txt)
     );
-
-    destroy(lib_path);
 }
 
-fn download(lib: &str, clear_input: bool) {
-    let lib_path = create_lib(lib);
+fn download(clear_input: bool) {
+    let lib = Library::new().create_in_out_folders();
 
     // Write some yt-dlp options
     let options = format!(
         "-i -P \"{}\" -o \"%(title)s.%(ext)s\" -x --audio-format mp3",
-        lib_path.to_str().unwrap()
+        lib.input_arg()
     );
-    write(lib_path.join("yt-dlp.conf"), options);
+    write(lib.cfg_dir.join("yt-dlp.conf"), options);
 
     // Add a query
-    run(setup(vec![lib, "add", "Darude Sandstorm"]).unwrap()).unwrap();
+    run(build(vec![lib.arg(), "add", "Darude Sandstorm"]).unwrap()).unwrap();
+
+    // Verify that the download folder is empty
+    assert_eq!(0, fs::read_dir(&lib.input_dir).unwrap().count());
 
     // Wait for download
     let config = if clear_input {
-        setup(vec![lib, "download", "-ac"]).unwrap()
+        build(vec![lib.arg(), "download", "-ac"]).unwrap()
     } else {
-        setup(vec![lib, "download", "-a"]).unwrap()
+        build(vec![lib.arg(), "download", "-a"]).unwrap()
     };
-    let lib_path = config.lib_path.clone().unwrap();
     let input_path = config.input_path.clone().unwrap();
     let clear_input = config.clear_input;
     run(config).unwrap();
 
-    // Verify that only the input.txt, yt-dlp.conf, and downloaded mp3 exist
-    let mut count = 0;
-    for entry in fs::read_dir(&lib_path).unwrap() {
-        let entry = entry.unwrap();
-        assert!(entry.file_type().unwrap().is_file());
-        let filename = entry.file_name().to_str().unwrap().to_string();
-        assert!(
-            filename.eq("input.txt") || filename.eq("yt-dlp.conf") || filename.ends_with(".mp3")
-        );
-        count += 1;
-    }
-    assert_eq!(3, count);
+    // Verify that the downloaded file is present
+    assert_eq!(1, fs::read_dir(&lib.input_dir).unwrap().count());
 
     if clear_input {
-        assert!(read(input_path).is_empty());
+        assert!(read(&input_path).is_empty());
     } else {
-        assert_eq!("ytsearch:Darude Sandstorm\n", read(input_path));
+        assert_eq!("ytsearch:Darude Sandstorm\n", read(&input_path));
     }
-
-    destroy(lib_path);
 }
 
 #[test]
 #[ignore]
 fn downloads_and_keeps_input() {
-    download("tw-test-dl-keep", false);
+    download(false);
 }
 
 #[test]
 #[ignore]
 fn downloads_and_clears_input() {
-    download("tw-test-dl-clear", true);
+    download(true);
 }
 
 #[test]
 fn fails_tag_on_incorrect_args() {
-    let lib = "tw-test-tag-fail";
-    let lib_path = create_lib(lib);
-    assert!(setup(vec![lib, "tag"]).is_err());
-    assert!(setup(vec![lib, "tag", "-i"]).is_err());
-    assert!(setup(vec![lib, "tag", "-i", "tw-test-uy4hfaif"]).is_err());
-    destroy(lib_path);
+    let lib = Library::new().create_cfg_folder();
+    assert!(build(vec![lib.arg(), "tag"]).is_err());
+    assert!(build(vec![lib.arg(), "tag", "-i"]).is_err());
+    assert!(build(vec![lib.arg(), "tag", "-i", "uy4hfaif"]).is_err());
 }
 
 #[test]
 fn tag_does_not_fail_without_files() {
-    let lib = "tw-test-tag-no-files";
-    let lib_path = create_lib(lib);
-    run(setup(vec![lib, "tag", "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
-    destroy(lib_path);
+    let lib = Library::new().create_in_out_folders();
+    run(build(vec![lib.arg(), "tag", "-i", lib.input_arg()]).unwrap()).unwrap();
 }
 
 #[test]
 fn tag_skips_unsupported_files() {
-    let lib = "tw-test-tag-unsupported";
-    let lib_path = create_lib(lib);
+    let lib = Library::new().create_in_out_folders();
 
     let files = [
         "empty_title.mp3",
@@ -152,45 +147,39 @@ fn tag_skips_unsupported_files() {
         "not_audio.jpg",
     ];
     for file in files {
-        copy(file, &lib_path);
+        lib.copy_to_input(file);
     }
 
-    run(setup(vec![lib, "tag", "-i", lib_path.to_str().unwrap()]).unwrap()).unwrap();
+    run(build(vec![lib.arg(), "tag", "-i", lib.input_arg()]).unwrap()).unwrap();
+}
 
-    destroy(lib_path);
+fn test_tags(original: &PathBuf, expected: &PathBuf, title: Option<&str>, artist: Option<&str>) {
+    assert!(fs::metadata(original).is_err());
+    let tag = Tag::new().read_from_path(expected).unwrap();
+    assert_eq!(tag.title(), title);
+    assert_eq!(tag.artist(), artist);
 }
 
 fn tag(ext: &str, auto_tag: bool) {
-    let lib = "tw-test-tag-yes";
-    let lib_path = create_lib(lib);
+    let lib = Library::new().create_in_out_folders();
 
     let file = format!("title.{}", ext);
-    copy(&file, &lib_path);
+    lib.copy_to_input(&file);
 
-    let mut expected = lib_path.join("Artist - Song [Radio Edit]");
-    expected.set_extension(ext);
-
-    assert!(fs::metadata(&expected).is_err());
-    let tag = Tag::new().read_from_path(lib_path.join(&file)).unwrap();
-    assert_eq!(tag.title().unwrap(), "Artist - Song (Radio Edit)");
-    assert_eq!(tag.artist(), None);
+    let old = lib.input_dir.join(&file);
+    let mut new = lib.input_dir.join("Artist - Song [Radio Edit]");
+    new.set_extension(ext);
+    test_tags(&new, &old, Some("Artist - Song (Radio Edit)"), None);
 
     if auto_tag {
-        let config = setup(vec![lib, "tag", "-ti", lib_path.to_str().unwrap()]).unwrap();
-        run(config).unwrap();
+        run(build(vec![lib.arg(), "tag", "-ti", lib.input_arg()]).unwrap()).unwrap();
     } else {
         let buffer = Vec::from(b"y\n");
         let reader: BufReader<&[u8]> = BufReader::new(buffer.as_ref());
-        let config = setup(vec![lib, "tag", "-i", lib_path.to_str().unwrap()]).unwrap();
+        let config = build(vec![lib.arg(), "tag", "-i", lib.input_arg()]).unwrap();
         run_with(config, reader).unwrap();
     }
-
-    assert!(fs::metadata(lib_path.join(&file)).is_err());
-    let tag = Tag::new().read_from_path(&expected).unwrap();
-    assert_eq!(tag.title().unwrap(), "Song [Radio Edit]");
-    assert_eq!(tag.artist().unwrap(), "Artist");
-
-    destroy(lib_path);
+    test_tags(&old, &new, Some("Song [Radio Edit]"), Some("Artist"));
 }
 
 #[test]
@@ -202,50 +191,34 @@ fn tags_diverse_audio_formats_with_title_tag() {
 
 #[test]
 fn cancel_tagging_preserves_file() {
-    let lib = "tw-test-tag-no";
-    let lib_path = create_lib(lib);
+    let lib = Library::new().create_in_out_folders();
+    lib.copy_to_input("title.mp3");
 
-    copy("title.mp3", &lib_path);
-
-    assert!(fs::metadata(lib_path.join("Artist - Song [Radio Edit].mp3")).is_err());
-    let tag = Tag::new()
-        .read_from_path(lib_path.join("title.mp3"))
-        .unwrap();
-    assert_eq!(tag.title().unwrap(), "Artist - Song (Radio Edit)");
-    assert_eq!(tag.artist(), None);
+    let old = lib.input_dir.join("title.mp3");
+    let new = lib.input_dir.join("Artist - Song [Radio Edit].mp3");
+    test_tags(&new, &old, Some("Artist - Song (Radio Edit)"), None);
 
     let buffer = Vec::from(b"n\n");
     let reader: BufReader<&[u8]> = BufReader::new(buffer.as_ref());
-    let config = setup(vec![lib, "tag", "-i", lib_path.to_str().unwrap()]).unwrap();
+    let config = build(vec![lib.arg(), "tag", "-i", lib.input_arg()]).unwrap();
     run_with(config, reader).unwrap();
-
-    assert!(fs::metadata(lib_path.join("Artist - Song [Radio Edit].mp3")).is_err());
-    let tag = Tag::new()
-        .read_from_path(lib_path.join("title.mp3"))
-        .unwrap();
-    assert_eq!(tag.title().unwrap(), "Artist - Song (Radio Edit)");
-    assert_eq!(tag.artist(), None);
-
-    destroy(lib_path);
+    test_tags(&new, &old, Some("Artist - Song (Radio Edit)"), None);
 }
 
 #[test]
 fn fails_deposit_on_incorrect_args() {
-    let lib = "tw-test-deposit-fail";
-    let lib_path = create_lib(lib);
-    let lib_str = lib_path.to_str().unwrap();
+    let lib = Library::new().create_in_out_folders();
 
     // Values are: Omit the option, No value for option, Invalid value, Valid value
-    let i_opts = [None, Some(""), Some("tw-test-iiii"), Some(lib_str)];
-    let o_opts = [None, Some(""), Some(lib_str)]; // An invalid path does not exist here, as it
-                                                  // will be created
+    let i_opts = [None, Some(""), Some("iiii"), Some(lib.input_arg())];
+    let o_opts = [None, Some(""), Some(lib.output_arg())];
     let d_opts = [None, Some(""), Some("dddd"), Some("A-Z")];
 
     // Test each permutation of options
     for i in i_opts {
         for o in o_opts {
             for d in d_opts {
-                let mut args = vec![lib, "deposit"];
+                let mut args = vec![lib.arg(), "deposit"];
                 // TODO also shuffle their order (6 different ways)
                 if let Some(i) = i {
                     args.push("-i");
@@ -267,48 +240,45 @@ fn fails_deposit_on_incorrect_args() {
                 }
 
                 // Either fail during config or during run
-                if let Ok(config) = setup(args) {
+                if let Ok(cfg) = build(args) {
                     // Succeed only with (not in order):
                     // -i lib_path -o any
                     // -i lib_path -o any -d A-Z
-                    if config.input_dir.as_ref().is_some_and(|s| s == &lib_path)
-                        && config.target_dir.as_ref().is_some()
+                    if cfg.input_dir.as_ref().is_some_and(|s| s == &lib.input_dir)
+                        && cfg.target_dir.as_ref().is_some()
                     {
-                        run(config).unwrap();
+                        run(cfg).unwrap();
                         continue;
                     }
-                    assert!(run(config).is_err());
+                    assert!(run(cfg).is_err());
                 } else {
                     assert!(true);
                 }
             }
         }
     }
-
-    destroy(lib_path);
 }
 
-fn deposit(lib: &str, mode: &str, filename: &str, az_path: &PathBuf, date_path: &PathBuf) {
-    let (lib_path, lib_in, lib_out) = create_lib_with_folders(lib);
+fn deposit(mode: &str, filename: &str, az_path: &PathBuf, date_path: &PathBuf) {
+    let lib = Library::new().create_in_out_folders();
+    lib.copy_to_input(filename);
 
-    copy(filename, &lib_in);
-
-    let original_path = lib_in.join(filename);
-    let drop_path = lib_out.join(filename);
-    let az_path = lib_out.join(az_path).join(filename);
-    let date_path = lib_out.join(date_path).join(filename);
+    let original_path = lib.input_dir.join(filename);
+    let drop_path = lib.output_dir.join(filename);
+    let az_path = lib.output_dir.join(az_path).join(filename);
+    let date_path = lib.output_dir.join(date_path).join(filename);
     assert!(fs::metadata(&drop_path).is_err());
     assert!(fs::metadata(&az_path).is_err());
     assert!(fs::metadata(&date_path).is_err());
 
-    let i = lib_in.to_str().unwrap();
-    let o = lib_out.to_str().unwrap();
+    let i = lib.input_arg();
+    let o = lib.output_arg();
     let opts = match mode {
-        "A-Z" => vec![lib, "deposit", "-i", i, "-o", o, "-d", "A-Z"],
-        "DATE" => vec![lib, "deposit", "-i", i, "-o", o, "-d", "DATE"],
-        _ => vec![lib, "deposit", "-i", i, "-o", o],
+        "A-Z" => vec![lib.arg(), "deposit", "-i", i, "-o", o, "-d", "A-Z"],
+        "DATE" => vec![lib.arg(), "deposit", "-i", i, "-o", o, "-d", "DATE"],
+        _ => vec![lib.arg(), "deposit", "-i", i, "-o", o],
     };
-    run(setup(opts).unwrap()).unwrap();
+    run(build(opts).unwrap()).unwrap();
 
     assert!(fs::metadata(original_path).is_err());
     match mode {
@@ -328,8 +298,6 @@ fn deposit(lib: &str, mode: &str, filename: &str, az_path: &PathBuf, date_path: 
             assert!(fs::metadata(date_path).is_err());
         }
     }
-
-    destroy(lib_path);
 }
 
 #[test]
@@ -349,25 +317,21 @@ fn deposits() {
     ];
     for (filename, az_path, date_path) in files {
         for drop in ["A-Z", "DATE", "x"] {
-            deposit("tw-test-deposit", drop, filename, &az_path, &date_path);
+            deposit(drop, filename, &az_path, &date_path);
         }
     }
 }
 
 #[test]
 fn fails_to_process_without_steps() {
-    let lib = "tw-test-no-steps";
-    let lib_path = create_lib(lib);
-    assert!(setup(vec![lib, "process"]).is_err());
-    destroy(lib_path);
+    let lib = Library::new().create_cfg_folder();
+    assert!(build(vec![lib.arg(), "process"]).is_err());
 }
 
 #[test]
 fn fails_to_process_illegal_commands() {
-    let lib = "tw-test-illegal";
-    let lib_path = create_lib(lib);
-    assert!(setup(vec![lib, "process", "-s", "add"]).is_err());
-    assert!(setup(vec![lib, "process", "-s", "process"]).is_err());
-    assert!(setup(vec![lib, "process", "-s", "list,process"]).is_err());
-    destroy(lib_path);
+    let lib = Library::new().create_cfg_folder();
+    assert!(build(vec![lib.arg(), "process", "-s", "add"]).is_err());
+    assert!(build(vec![lib.arg(), "process", "-s", "process"]).is_err());
+    assert!(build(vec![lib.arg(), "process", "-s", "list,process"]).is_err());
 }

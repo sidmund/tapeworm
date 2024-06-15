@@ -853,6 +853,7 @@ dependencies = [
  "chrono",
  "dirs",
  "headless_chrome",
+ "rand",
  "regex",
  "sanitize-filename",
  "url",
