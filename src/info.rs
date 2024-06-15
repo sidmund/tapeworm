@@ -1,5 +1,7 @@
 use crate::{types, Config};
 use std::fs;
+use std::io::{self, Write};
+use tabwriter::TabWriter;
 
 /// Show the library's status and discovered config files.
 pub fn show(config: &Config) -> types::UnitResult {
@@ -38,11 +40,12 @@ pub fn show(config: &Config) -> types::UnitResult {
 
 /// Print the list of aliases.
 pub fn list(config: &Config) {
-    println!("\n  ALIAS\t\tLIBRARY PATH");
+    let mut tw = TabWriter::new(io::stdout());
+    writeln!(&mut tw, "ALIAS\tLIBRARY PATH").unwrap();
     for (alias, path) in &config.aliases {
-        println!("  {}\t\t{}", alias, path.display());
+        writeln!(&mut tw, "{}\t{}", alias, path.display()).unwrap();
     }
-    println!();
+    tw.flush().unwrap();
 }
 
 pub fn help() {
