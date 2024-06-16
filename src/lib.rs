@@ -152,13 +152,17 @@ impl Config {
             // else assume 'library' to be the library path itself
             if let Some(lib_path) = self.aliases.get(&library) {
                 self.lib_alias = Some(library);
-                lib_path.clone()
+                if lib_path.starts_with("~/") {
+                    let rest = &lib_path.to_str().unwrap()[2..];
+                    dirs::home_dir().unwrap().join(rest)
+                } else {
+                    lib_path.clone()
+                }
             } else {
                 env::current_dir()?.join(library)
             }
         } else {
-            // Assume current directory to be a library
-            env::current_dir()?
+            env::current_dir()? // Assume current directory to be a library
         };
 
         let lib_conf_folder = lib_path.join(".tapeworm");
