@@ -19,7 +19,11 @@ pub fn show(config: &Config) -> types::UnitResult {
 
     let input_dir = config.input_dir.as_ref().unwrap();
     println!("  Input folder: {}", input_dir.display());
-    println!("  > {} files", util::filepaths_in(input_dir)?.len());
+    let mut n = 0;
+    if let Ok(files) = util::filepaths_in(input_dir) {
+        n = files.len()
+    }
+    println!("  > {} files", n);
     println!();
 
     let output_dir = config.target_dir.as_ref().unwrap();
