@@ -9,7 +9,7 @@ mod types;
 mod util;
 
 use crate::deposit::DepositMode;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::{env, fs};
@@ -19,7 +19,7 @@ pub struct Config {
     pub command: String,
     pub lib_alias: Option<String>,
     pub lib_desc: Option<String>,
-    pub aliases: HashMap<String, PathBuf>,
+    pub aliases: BTreeMap<String, PathBuf>,
 
     // Paths
     pub lib_path: Option<PathBuf>,
