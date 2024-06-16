@@ -1,4 +1,4 @@
-use crate::{types, Config};
+use crate::{types, util, Config};
 use std::fs;
 use std::io::{self, Write};
 use tabwriter::TabWriter;
@@ -6,17 +6,27 @@ use tabwriter::TabWriter;
 /// Show the library's status and discovered config files.
 pub fn show(config: &Config) -> types::UnitResult {
     println!(
-        "\n  Library at : {}",
+        "\n  Library: {}",
         config.lib_path.as_ref().unwrap().display()
     );
     if let Some(alias) = &config.lib_alias {
-        println!("  Aliased to : {}", alias);
+        println!("  > Alias: {}", alias);
     }
     if let Some(desc) = &config.lib_desc {
-        println!("  Description: {}", desc);
+        println!("  > Description: {}", desc);
     }
     println!();
 
+    let input_dir = config.input_dir.as_ref().unwrap();
+    println!("  Input folder: {}", input_dir.display());
+    println!("  > {} files", util::filepaths_in(input_dir)?.len());
+    println!();
+
+    let output_dir = config.target_dir.as_ref().unwrap();
+    println!("  Target folder: {}", output_dir.display());
+    println!();
+
+    println!("  Configuration files:");
     let input_path = config.input_path.as_ref().unwrap();
     if fs::metadata(input_path).is_ok() {
         print!("  > input.txt : ");
