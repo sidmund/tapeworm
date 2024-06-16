@@ -171,31 +171,67 @@ pub fn remove_brackets(s: &str) -> String {
 
 /// Remove all pairs of matching empty brackets.
 pub fn remove_empty_brackets(s: String) -> String {
-    let mut result = s.clone();
-    for (i, c) in s.chars().enumerate() {
-        for (a, b) in [('(', ')'), ('[', ']'), ('{', '}'), ('<', '>')] {
-            if c == a && s.chars().nth(i + 1) == Some(b) {
-                result = String::from(&s[..i]) + &s[i + 2..];
+    let mut result = String::new();
+
+    let mut iter = s.chars();
+    let mut a = iter.next();
+    let mut b = iter.next();
+    let mut skip = false;
+
+    loop {
+        if a.is_none() {
+            break;
+        }
+        if !skip {
+            result.push(a.unwrap());
+        }
+
+        if b.is_none() {
+            break;
+        }
+        result.push(b.unwrap());
+
+        skip = false;
+        for (left, right) in [('(', ')'), ('[', ']'), ('{', '}'), ('<', '>')] {
+            if a == Some(left) && b == Some(right) {
+                skip = true;
                 break;
             }
         }
+
+        if skip {
+            result.pop();
+            result.pop();
+            a = iter.next();
+            b = iter.next();
+        } else {
+            a = b;
+            b = iter.next();
+        }
+        skip = !skip;
     }
 
     if result.len() < s.len() {
         remove_empty_brackets(result)
     } else {
-        result
+        result // Nothing more to remove
     }
 }
 
 /// Remove all duplicate whitespace.
 pub fn remove_duplicate_whitespace(s: String) -> String {
-    for (i, c) in s.chars().enumerate() {
-        if c == ' ' && s.chars().nth(i + 1) == Some(' ') {
-            return remove_duplicate_whitespace(String::from(&s[..i]) + &s[i + 1..]);
+    let mut result = String::new();
+
+    let mut previous_space = false;
+    for c in s.chars() {
+        if c == ' ' && previous_space {
+            continue;
         }
+        previous_space = c == ' ';
+        result.push(c);
     }
-    s
+
+    result
 }
 
 #[cfg(test)]
@@ -213,6 +249,7 @@ mod tests {
             ("【mix】", "mix"),
             (" [remix]", "remix"),
             (" [ remix ]  ", "remix"),
+            ("(OFFICIAL MUSIC VIDEO 🎵)", "OFFICIAL MUSIC VIDEO 🎵"),
         ];
         for (input, expected) in inputs {
             assert_eq!(remove_brackets(input), expected);
@@ -224,6 +261,8 @@ mod tests {
         let inputs = [
             ("Official HD Video", "HD", "Official  Video"),
             ("03. Artist - Song", "03.", "Artist - Song"),
+            ("A ➕ B", "B", "A ➕"),
+            ("A ➕ B", "➕", "A  B"),
         ];
         for (input, to_remove, expected) in inputs {
             assert_eq!(
@@ -236,6 +275,7 @@ mod tests {
     #[test]
     fn removes_empty_brackets() {
         let inputs = [
+            ("", ""),
             ("(", "("),
             (")", ")"),
             ("()", ""),
@@ -244,6 +284,8 @@ mod tests {
             ("<>", ""),
             ("(<>)[]", ""),
             ("[(()<{}>)[]((()))]", ""),
+            ("Song ()", "Song "),
+            ("Song 🎵 []", "Song 🎵 "),
         ];
         for (input, expected) in inputs {
             assert_eq!(remove_empty_brackets(input.to_string()), expected);
@@ -252,7 +294,14 @@ mod tests {
 
     #[test]
     fn removes_duplicate_whitespace() {
-        let inputs = [("  ", " "), ("a  b", "a b"), ("a  bc  d", "a bc d")];
+        let inputs = [
+            ("  ", " "),
+            ("a  b", "a b"),
+            ("a   b", "a b"),
+            ("a  bc  d", "a bc d"),
+            ("Song  🎵", "Song 🎵"),
+            ("🎵  Song", "🎵 Song"),
+        ];
         for (input, expected) in inputs {
             assert_eq!(remove_duplicate_whitespace(input.to_string()), expected);
         }
