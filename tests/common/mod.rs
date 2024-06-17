@@ -7,6 +7,8 @@ use std::{env, fs};
 use tapeworm::Config;
 
 pub struct Library {
+    /// The relative base library directory name
+    pub name: String,
     /// Absolute path to the base library directory
     pub base_dir: PathBuf,
     /// Absolute path to the library config directory
@@ -28,7 +30,8 @@ impl Library {
     /// Create a new Library. The library will have a random name, and the base directory is
     /// relative to the current directory. This does not actually create any directories.
     pub fn new() -> Self {
-        let base_dir = env::current_dir().unwrap().join(Library::generate_name());
+        let name = Library::generate_name();
+        let base_dir = env::current_dir().unwrap().join(&name);
         assert!(fs::metadata(&base_dir).is_err());
         let cfg_dir = base_dir.join(".tapeworm");
 
@@ -37,6 +40,7 @@ impl Library {
             input_dir: cfg_dir.join("in"),
             cfg_dir,
             base_dir,
+            name,
         }
     }
 

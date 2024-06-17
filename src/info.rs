@@ -68,75 +68,68 @@ pub fn help() {
 tapeworm - A scraper and downloader written in Rust
 
 COMMANDS
-    A command may take options. If it does, the GENERAL OPTIONS also apply.
+    If a command takes [OPTIONS] (sic), the GENERAL OPTIONS also apply.
+    Note that LIBRARY refers to either the library path or its alias.
 
     help, h, -h, --help
         Show this help message
 
     list, ls, l
-        List all libraries
+        List all library aliases
 
     LIBRARY
         Show information about the LIBRARY
 
     LIBRARY add TERM|URL [TERM|URL...]
-        Add TERMs and/or URLs to the LIBRARY. TERMs are added as YouTube search queries.
-        A URL is simply added, unless it points to a Spotify playlist.
-        In this case, it will be scraped, and the found songs are added as YouTube search queries.
-        This is because of Spotify DRM restrictions.
+        Add TERMs and/or URLs to the LIBRARY. TERMs are added as YouTube search queries. A URL is simply added, unless it points to a Spotify playlist. In this case, it will be scraped, and the found songs are added as YouTube search queries. This is because of Spotify DRM restrictions.
 
         Note that YouTube search queries can be downloaded by yt-dlp.
 
-        NB: if LIBRARY does not exist, it will be created.
-
     LIBRARY download [OPTIONS]
-        Given the inputs in ~/.config/tapeworm/LIBRARY/input.txt,
-        scrape any queries and download all (scraped) URLs,
-        using the config in ~/.config/tapeworm/LIBRARY/yt-dlp.conf
+        Given the inputs in ~/.config/tapeworm/LIBRARY/input.txt, scrape any queries and download all (scraped) URLs, using the config in ~/.config/tapeworm/LIBRARY/yt-dlp.conf
 
         OPTIONS
-        -c      Clear the input file after scraping
-        -a      Automatically keep downloads (no confirmation prompt)
+        -c          Clear the input file after scraping
+        -a          Automatically keep downloads (no confirmation prompt)
 
     LIBRARY tag [OPTIONS]
-        Tag all downloaded files in the directory specified by INPUT_DIR
+        Tag all files in the input directory
 
         OPTIONS
-        -i      Set the INPUT_DIR, required if not set in lib.conf
-        -t      Automatically write discovered tags
+        -i IN       What directory to look in for files to tag. By default, this is the `.tapeworm/tmp` folder
+        -t          Automatically write discovered tags (no confirmation prompt and no edit possibility)
 
     LIBRARY deposit [OPTIONS]
         Move downloaded files to the directory specified by TARGET_DIR
 
         OPTIONS
-        -d MODE
-            Requires -o. Deposit files into an organized manner into the TARGET_DIR.
-            MODE is one of the following:
-            - \"A-Z\": Sort into alphabetic subfolders, and possibly ARTIST and ALBUM subfolders
-            - \"DATE\": Sort into YYYY/MM subfolders
-            - \"DROP\": Drop files directly in TARGET_DIR
-
-        -i
-            Set the INPUT_DIR, required if not set in lib.conf
-
-        -o
-            Set the TARGET_DIR (output directory), requires -i
+        -d MODE     Organize files into the output directory. MODE is one of the following:
+                    - \"A-Z\": Sort into alphabetic subfolders, and possibly ARTIST and ALBUM subfolders
+                    - \"DATE\": Sort into YYYY/MM subfolders
+                    - \"DROP\": Drop files directly in TARGET_DIR
+        -i IN       What directory to find files in. By default, this is the `.tapeworm/tmp` folder
+        -o OUT      What directory to move files to. By default, this is the library root folder
 
     LIBRARY process [OPTIONS]
         Process LIBRARY as specified by `STEPS`. Any options from `download`, `tag`, `deposit` are valid here
 
         OPTIONS
-        -s      Set the processing steps (commands) to run on the library as a
-                comma-separated list, required if not set in lib.conf
+        -s          Set the processing steps (commands) to run on the library as a comma-separated list, required if not set in lib.conf
+
+    alias ALIAS [OPTION]
+        Configure the ALIAS for a library. With an alias, any library command can be specified with the alias instead of the full library path. Without an option, this command will show the library path for ALIAS
+
+        OPTION
+        -p PATH     Add or overwrite ALIAS with the given library PATH
+        -r          Remove this ALIAS
 
 GENERAL OPTIONS
-    The options from ~/.config/tapeworm/LIBRARY/lib.conf are loaded first.
+    The options from path/to/library/.tapeworm/lib.conf are loaded first.
     Setting a CLI option will override its value in the lib.conf file, if present.
 
     -v      Verbosely show what is being processed
 
 EXAMPLE
-    # Create the library by recording a query
     tapeworm LIBRARY add song  # records 'ytsearch:song'
     tapeworm LIBRARY add \"the artist - a song\"  # records 'ytsearch:the artist - a song'
     tapeworm LIBRARY add https://youtube.com/watch?v=123

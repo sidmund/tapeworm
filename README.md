@@ -57,7 +57,7 @@ tapeworm COMMAND [OPTIONS]  # note that the library does not need to be specifie
 tapeworm "~/Library" COMMAND [OPTIONS]
 
 # c) From anywhere using an alias
-tapeworm alias lib "~/Library"
+tapeworm "~/Library" alias lib
 tapeworm lib COMMAND [OPTIONS]
 ```
 
@@ -67,13 +67,13 @@ The `alias` command supports the following operations:
 tapeworm list
 
 # Create / Overwrite an alias
-tapeworm alias lorem "~/Ipsum"
+tapeworm "~/Ipsum" alias lorem
 
 # Show the path the alias points to
-tapeworm alias lorem
+tapeworm lorem alias
 
 # Delete an alias
-tapeworm alias lorem -r
+tapeworm lorem alias -r
 ```
 
 Aliases cannot be named the same as any tapeworm command. The aliased directory must point to an existing folder with a `.tapeworm` subfolder inside it. Aliases are stored as newline-separated `alias=path` pairs in the general configuration file located at:

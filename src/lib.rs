@@ -1,4 +1,5 @@
 mod add;
+mod alias;
 mod deposit;
 mod download;
 mod editor;
@@ -22,6 +23,7 @@ pub struct Config {
     pub aliases: BTreeMap<String, PathBuf>,
 
     // Paths
+    pub general_conf: PathBuf,
     pub lib_path: Option<PathBuf>,
     pub lib_conf_path: Option<PathBuf>,
     pub input_path: Option<PathBuf>,
@@ -68,7 +70,7 @@ impl Config {
                 self.command = String::from("list");
                 self.parse_general_config()?;
             }
-            "show" | "add" | "download" | "tag" | "deposit" | "process" => {
+            "alias" | "show" | "add" | "download" | "tag" | "deposit" | "process" => {
                 // Invoked as `tapeworm COMMAND [OPTIONS]`
                 self.command = arg;
                 self.setup_library(None)?;
@@ -86,14 +88,27 @@ impl Config {
 
     /// Parse extra options for commands that require them.
     fn parse_extra_options(&mut self, args: impl Iterator<Item = String>) -> types::UnitResult {
-        // Parse / build parameters
-        if self.command == "add" {
-            self.parse_terms(args)?;
-        } else if self.command == "show" {
-            self.build_lib_conf_options()?; // just load the library settings
-        } else if ["download", "tag", "deposit", "process"].contains(&self.command.as_str()) {
-            self.build_lib_conf_options()?; // override defaults with lib.conf
-            self.parse_cli_options(args)?; // override defaults/lib.conf with CLI
+        // Load library settings (overrides defaults)
+        if ["alias", "show", "download", "tag", "deposit", "process"]
+            .contains(&self.command.as_str())
+        {
+            self.build_lib_conf_options()?;
+        }
+
+        // Parse CLI options (may override defaults/lib.conf)
+        if ["download", "tag", "deposit", "process"].contains(&self.command.as_str()) {
+            self.parse_cli_options(args)?;
+        } else if self.command == "add" {
+            let terms = args.collect::<Vec<String>>();
+            if terms.is_empty() {
+                return Err("Provide search term(s) and/or URL(s). See 'help'".into());
+            }
+            self.terms = Some(terms);
+        } else if self.command == "alias" {
+            let terms = args.collect::<Vec<String>>();
+            if !terms.is_empty() {
+                self.terms = Some(terms);
+            }
         }
 
         // Enforce parameter requirements
@@ -116,34 +131,24 @@ impl Config {
 
     /// Read in the configured aliases.
     fn parse_general_config(&mut self) -> types::UnitResult {
-        let config_file = PathBuf::from(dirs::config_dir().unwrap())
-            .join("tapeworm")
-            .join("tapeworm.conf");
-
-        if let Some(contents) = fs::read_to_string(config_file).ok() {
+        if let Some(contents) = fs::read_to_string(&self.general_conf).ok() {
             for line in contents.lines().map(|l| l.trim()) {
                 if line.is_empty() || line.starts_with("#") {
                     continue;
                 }
 
-                let alias = line.split_once("=");
-                if alias.is_none() {
+                if let Some((aka, path)) = line.split_once("=") {
+                    self.aliases.insert(String::from(aka), PathBuf::from(path));
+                } else {
                     return Err(format!("Invalid alias: {}", line).into());
                 }
-
-                let (aka, path) = alias.unwrap();
-                self.aliases.insert(String::from(aka), PathBuf::from(path));
             }
         }
 
         Ok(())
     }
 
-    /// Set up the library and its configuration paths.
-    ///
-    /// # Errors
-    /// When the library folder is not found. This applies to every library command, except `add`, which will
-    /// create it.
+    /// Set up the library and its configuration paths for commands that require it.
     fn setup_library(&mut self, library: Option<String>) -> types::UnitResult {
         self.parse_general_config()?;
 
@@ -180,20 +185,6 @@ impl Config {
         self.lib_path = Some(lib_path);
 
         Ok(())
-    }
-
-    fn parse_terms(&mut self, mut args: impl Iterator<Item = String>) -> types::UnitResult {
-        let mut terms = Vec::new();
-        while let Some(arg) = args.next() {
-            terms.push(arg);
-        }
-
-        if terms.is_empty() {
-            Err("Provide search term(s) and/or URL(s). See 'help'".into())
-        } else {
-            self.terms = Some(terms);
-            Ok(())
-        }
     }
 
     /// Attempt to read in options from lib.conf if it exists.
@@ -350,6 +341,9 @@ impl Config {
     fn default() -> Config {
         Config {
             command: String::from("help"),
+            general_conf: PathBuf::from(dirs::config_dir().unwrap())
+                .join("tapeworm")
+                .join("tapeworm.conf"),
             title_template: String::from("{title} ({feat}) [{remix}]"),
             filename_template: String::from("{artist} - {title}"),
             ..Default::default()
@@ -379,6 +373,7 @@ pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
         match command.as_str() {
             "help" => info::help(),
             "list" => info::list(&config),
+            "alias" => alias::run(&config)?,
             "show" => info::show(&config)?,
             "add" => add::run(&config)?,
             "download" => download::run(&config, &mut reader)?,

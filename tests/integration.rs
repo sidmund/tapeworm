@@ -54,6 +54,27 @@ fn shows_library() {
 }
 
 #[test]
+fn alias() {
+    let lib = Library::new().create_cfg_folder();
+    let alias = format!("{}-alias", lib.name);
+
+    // Errors when alias does not exist
+    assert!(build(vec![&alias, "show"]).is_err());
+
+    // Succeeds after alias is added
+    run(build(vec![lib.arg(), "alias", &alias]).unwrap()).unwrap();
+    run(build(vec![&alias, "alias"]).unwrap()).unwrap();
+    run(build(vec![&alias, "show"]).unwrap()).unwrap();
+
+    // Remove the alias, either lib path or alias should work
+    run(build(vec![&alias, "alias", "-r"]).unwrap()).unwrap();
+    run(build(vec![lib.arg(), "alias", "-r"]).unwrap()).unwrap();
+
+    // Errors again when alias has been removed
+    assert!(build(vec![&alias, "show"]).is_err());
+}
+
+#[test]
 fn add_fails_without_args() {
     let lib = Library::new().create_cfg_folder();
     assert!(build(vec![lib.arg(), "add"]).is_err());

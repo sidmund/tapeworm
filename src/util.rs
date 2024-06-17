@@ -95,16 +95,23 @@ pub fn select<R: BufRead>(
     }
 }
 
-/// # Parameters
-/// - `path`: the path to the file
-/// - `content`: the content to append to the file
+/// Append the `content` to the file at `path`
 pub fn append<P: AsRef<Path>>(path: P, content: String) -> types::UnitResult {
-    fs::OpenOptions::new()
+    Ok(fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)?
-        .write_all(content.as_bytes())?;
-    Ok(())
+        .write_all(content.as_bytes())?)
+}
+
+/// Overwrite the `content` to the file at `path`
+pub fn write<P: AsRef<Path>>(path: P, content: String) -> types::UnitResult {
+    Ok(fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(path)?
+        .write_all(content.as_bytes())?)
 }
 
 /// Create the directory if it does not exist.
