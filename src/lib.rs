@@ -1,5 +1,6 @@
 mod add;
 mod alias;
+mod clean;
 mod deposit;
 mod download;
 mod editor;
@@ -70,7 +71,7 @@ impl Config {
                 self.command = String::from("list");
                 self.parse_general_config()?;
             }
-            "alias" | "show" | "add" | "download" | "tag" | "deposit" | "process" => {
+            "alias" | "show" | "clean" | "add" | "download" | "tag" | "deposit" | "process" => {
                 // Invoked as `tapeworm COMMAND [OPTIONS]`
                 self.command = arg;
                 self.setup_library(None)?;
@@ -88,15 +89,19 @@ impl Config {
 
     /// Parse extra options for commands that require them.
     fn parse_extra_options(&mut self, args: impl Iterator<Item = String>) -> types::UnitResult {
+        // Config whitelists
+        let uses_lib_conf = vec![
+            "alias", "show", "clean", "download", "tag", "deposit", "process",
+        ];
+        let uses_cli = vec!["clean", "download", "tag", "deposit", "process"];
+
         // Load library settings (overrides defaults)
-        if ["alias", "show", "download", "tag", "deposit", "process"]
-            .contains(&self.command.as_str())
-        {
+        if uses_lib_conf.contains(&self.command.as_str()) {
             self.build_lib_conf_options()?;
         }
 
         // Parse CLI options (may override defaults/lib.conf)
-        if ["download", "tag", "deposit", "process"].contains(&self.command.as_str()) {
+        if uses_cli.contains(&self.command.as_str()) {
             self.parse_cli_options(args)?;
         } else if self.command == "add" {
             let terms = args.collect::<Vec<String>>();
@@ -299,7 +304,7 @@ impl Config {
             return Err("No processing steps specified. See 'help'".into());
         }
 
-        let whitelist = ["download", "tag", "deposit"];
+        let whitelist = ["download", "tag", "deposit", "clean"];
         for step in self.steps.as_ref().unwrap() {
             if !whitelist.contains(&step.as_str()) {
                 return Err(format!("Unsupported processing step '{}'. See 'help'", step).into());
@@ -375,6 +380,7 @@ pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
             "list" => info::list(&config),
             "alias" => alias::run(&config)?,
             "show" => info::show(&config)?,
+            "clean" => clean::run(&config)?,
             "add" => add::run(&config)?,
             "download" => download::run(&config, &mut reader)?,
             "tag" => tag::run(&config, &mut reader)?,

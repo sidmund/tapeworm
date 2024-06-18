@@ -200,6 +200,13 @@ TARGET_DIR/2024/05/hello.mp3
 ```
 This organization mode is aimed at photographs, but does of course work with any files / library.
 
+### :chains: Cleaning
+
+The `clean` command removes empty directories inside the library folder. Of course, the `.tapeworm` folder and its constituents are always kept.
+```bash
+tapeworm LIBRARY clean
+```
+
 ### :chains: Processing
 
 If a library is intended to use multiple commands in a certain order, `process` is provided to simplify the interaction with the library. Instead of manually executing each command, a list of commands can be configured. These are then executed in the specified order each time `process` is invoked.
@@ -207,7 +214,7 @@ If a library is intended to use multiple commands in a certain order, `process` 
 tapeworm LIBRARY process -s download,tag
 ```
 
-> :information_source: `process` only accepts the following processing steps: `download`, `tag`, `deposit`
+> :information_source: `process` only accepts the following processing steps: `download`, `tag`, `deposit`, `clean`
 
 ## :wrench: Configuration
 

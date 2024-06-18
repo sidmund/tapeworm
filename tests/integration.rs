@@ -75,6 +75,43 @@ fn alias() {
 }
 
 #[test]
+fn clean_removes_empty_directories() {
+    let lib = Library::new().create_cfg_folder();
+    let folders = [
+        (lib.base_dir.join("f1"), false),
+        (lib.base_dir.join("f2"), true),
+        (lib.base_dir.join("f3"), false),
+        (lib.base_dir.join("f3").join("f4"), false),
+        (lib.base_dir.join("f5"), true),
+        (lib.base_dir.join("f5").join("f6"), false),
+    ];
+    let files = [
+        lib.base_dir.join("f2").join("file"),
+        lib.base_dir.join("f5").join("file"),
+    ];
+    for (folder, _) in &folders {
+        fs::create_dir_all(folder).unwrap();
+        assert!(fs::metadata(folder).is_ok());
+    }
+    for file in &files {
+        write(file, String::from("test"));
+        assert!(fs::metadata(file).is_ok());
+    }
+
+    run(build(vec![lib.arg(), "clean"]).unwrap()).unwrap();
+    for (folder, keep) in &folders {
+        if *keep {
+            assert!(fs::metadata(folder).is_ok());
+        } else {
+            assert!(fs::metadata(folder).is_err());
+        }
+    }
+    for file in &files {
+        assert!(fs::metadata(file).is_ok());
+    }
+}
+
+#[test]
 fn add_fails_without_args() {
     let lib = Library::new().create_cfg_folder();
     assert!(build(vec![lib.arg(), "add"]).is_err());
@@ -103,7 +140,7 @@ fn download(clear_input: bool) {
         "-i -P \"{}\" -o \"%(title)s.%(ext)s\" -x --audio-format mp3",
         lib.input_arg()
     );
-    write(lib.cfg_dir.join("yt-dlp.conf"), options);
+    write(&lib.cfg_dir.join("yt-dlp.conf"), options);
 
     // Add a query
     run(build(vec![lib.arg(), "add", "Darude Sandstorm"]).unwrap()).unwrap();

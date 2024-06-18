@@ -116,6 +116,9 @@ COMMANDS
         OPTIONS
         -s          Set the processing steps (commands) to run on the library as a comma-separated list, required if not set in lib.conf
 
+    LIBRARY clean [OPTIONS]
+        Removes empty folders
+
     alias ALIAS [OPTION]
         Configure the ALIAS for a library. With an alias, any library command can be specified with the alias instead of the full library path. Without an option, this command will show the library path for ALIAS
 

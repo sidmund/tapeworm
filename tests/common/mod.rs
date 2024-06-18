@@ -126,7 +126,7 @@ pub fn read(path: &PathBuf) -> String {
 
 /// Write the `contents` to the file at `path`. If the file does not exist,
 /// it is created; otherwise, it will be overwritten.
-pub fn write(path: PathBuf, contents: String) {
+pub fn write(path: &PathBuf, contents: String) {
     let mut file = fs::OpenOptions::new()
         .create(true)
         .write(true)
