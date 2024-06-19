@@ -122,12 +122,12 @@ COMMANDS
         OPTIONS
         -o TARGET   What directory to clean. By default, this is the library root folder
 
-    alias ALIAS [OPTION]
+    LIBRARY alias [ALIAS|-r]
         Configure the ALIAS for a library. With an alias, any library command can be specified with the alias instead of the full library path. Without an option, this command will show the library path for ALIAS
 
         OPTION
-        -p PATH     Add or overwrite ALIAS with the given library PATH
-        -r          Remove this ALIAS
+        ALIAS       When LIBRARY is an alias, change the alias to ALIAS. When LIBRARY is a path, add (another) alias as ALIAS
+        -r          When LIBRARY is an alias, remove the alias. When LIBRARY is a path, remove all aliases for that path
 
 GENERAL OPTIONS
     The options from path/to/library/.tapeworm/lib.conf are loaded first.

@@ -66,7 +66,7 @@ The `alias` command supports the following operations:
 # List all aliases and the paths they point to
 tapeworm list
 
-# Create / Overwrite an alias
+# Add a new alias for the path
 tapeworm "~/Ipsum" alias lorem
 
 # Show the path the alias points to
@@ -74,6 +74,12 @@ tapeworm lorem alias
 
 # Delete an alias
 tapeworm lorem alias -r
+
+# Change an alias
+tapeworm lorem alias ipsum
+
+# Delete all aliases for the path
+tapeworm "~/Ipsum" alias -r
 ```
 
 Aliases cannot be named the same as any tapeworm command. The aliased directory must point to an existing folder with a `.tapeworm` subfolder inside it. Aliases are stored as newline-separated `alias=path` pairs in the general configuration file located at:
