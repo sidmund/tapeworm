@@ -3,8 +3,7 @@ use std::fs::{self, DirEntry};
 use std::path::PathBuf;
 
 pub fn run(config: &Config) -> types::UnitResult {
-    let path = config.lib_path.as_ref().unwrap();
-    remove_empty_folders(path, 0, config.verbose)
+    remove_empty_folders(config.lib_path.as_ref().unwrap(), 0, config.verbose)
 }
 
 /// Remove empty folders, except for ".tapeworm".
@@ -33,11 +32,9 @@ fn remove_empty_folders(root: &PathBuf, depth: i8, verbose: bool) -> types::Unit
         if entry.file_name() == ".tapeworm" {
             continue;
         }
-
         if entry.file_type().unwrap().is_dir() {
             remove_empty_folders(&entry.path(), depth + 1, verbose)?;
         }
     }
-
     Ok(())
 }

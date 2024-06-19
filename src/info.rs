@@ -54,7 +54,7 @@ pub fn show(config: &Config) -> types::UnitResult {
 
 /// Print the list of aliases.
 pub fn list(config: &Config) {
-    let mut tw = TabWriter::new(io::stdout());
+    let mut tw = TabWriter::new(io::stdout().lock());
     writeln!(&mut tw, "ALIAS\tLIBRARY PATH").unwrap();
     for (alias, path) in &config.aliases {
         writeln!(&mut tw, "{}\t{}", alias, path.display()).unwrap();

@@ -1,5 +1,3 @@
-//! Tag editor functions.
-
 use crate::{types, util};
 use std::collections::HashMap;
 use std::io::{BufRead, Write};

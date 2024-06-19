@@ -49,61 +49,35 @@ impl Command {
 
     fn uses_lib_conf(&self) -> bool {
         match self {
-            Self::Help => false,
-            Self::List => false,
-            Self::Add => false,
             Self::Alias => true,
-            Self::Show => true,
             Self::Clean => true,
-            Self::Download => true,
-            Self::Tag => true,
             Self::Deposit => true,
+            Self::Download => true,
             Self::Process => true,
+            Self::Show => true,
+            Self::Tag => true,
+            _ => false,
         }
     }
 
     fn uses_cli(&self) -> bool {
         match self {
-            Self::Help => false,
-            Self::List => false,
-            Self::Alias => false,
-            Self::Show => false,
-            Self::Add => false,
             Self::Clean => true,
-            Self::Download => true,
-            Self::Tag => true,
             Self::Deposit => true,
+            Self::Download => true,
             Self::Process => true,
+            Self::Tag => true,
+            _ => false,
         }
     }
 
     fn is_valid_processing_step(&self) -> bool {
         match self {
-            Self::Help => false,
-            Self::List => false,
-            Self::Alias => false,
-            Self::Show => false,
-            Self::Add => false,
-            Self::Process => false,
+            Self::Clean => true,
+            Self::Deposit => true,
             Self::Download => true,
             Self::Tag => true,
-            Self::Deposit => true,
-            Self::Clean => true,
-        }
-    }
-
-    fn run<R: BufRead>(&self, config: &Config, reader: &mut R) -> types::UnitResult {
-        match self {
-            Self::Help => Ok(info::help()),
-            Self::List => Ok(info::list(config)),
-            Self::Alias => alias::run(config),
-            Self::Show => info::show(config),
-            Self::Clean => clean::run(config),
-            Self::Add => add::run(config),
-            Self::Download => download::run(config, reader),
-            Self::Tag => tag::run(config, reader),
-            Self::Deposit => deposit::run(config, reader),
-            _ => Err(format!("Cannot run this command: {:?}. See 'help'", self).into()),
+            _ => false,
         }
     }
 }
@@ -152,30 +126,27 @@ impl Config {
         if arg.is_none() {
             return Ok(()); // 'help' is default
         }
-        let arg = arg.unwrap();
 
-        if let Ok(cmd) = Command::from(&arg) {
-            if cmd == Command::Help {
-                return Ok(()); // 'help' is default
-            } else if cmd == Command::List {
+        if let Ok(cmd) = Command::from(arg.as_ref().unwrap()) {
+            if cmd == Command::List {
                 self.commands = vec![cmd];
                 self.parse_general_config()?;
-            } else {
+            } else if cmd != Command::Help {
                 // Invoked as `tapeworm COMMAND [OPTIONS]`
                 self.commands = vec![cmd];
                 self.setup_library(None)?;
             }
         } else {
             // Invoked as `tapeworm LIBRARY [COMMAND] [OPTIONS]`
-            self.setup_library(Some(arg))?;
+            self.setup_library(Some(arg.unwrap()))?;
             self.commands = if let Some(arg) = args.next() {
                 vec![Command::from(&arg).unwrap()]
             } else {
-                vec![Command::Show] // Default, when only LIBRARY given
+                vec![Command::Show] // The default when only LIBRARY given
             };
         }
 
-        Ok(())
+        Ok(()) // 'help' ends up here immediately as it is the default
     }
 
     /// Parse extra options for commands that require them.
@@ -229,7 +200,6 @@ impl Config {
                 }
             }
         }
-
         Ok(())
     }
 
@@ -263,10 +233,8 @@ impl Config {
         self.lib_conf_path = Some(lib_conf_folder.join("lib.conf"));
         self.input_path = Some(lib_conf_folder.join("input.txt"));
         self.yt_dlp_conf_path = Some(lib_conf_folder.join("yt-dlp.conf"));
-
         self.input_dir = Some(lib_conf_folder.join("tmp"));
         self.target_dir = Some(lib_path.clone());
-
         self.lib_path = Some(lib_path);
 
         Ok(())
@@ -449,8 +417,19 @@ impl Config {
 }
 
 pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
-    for command in &config.commands {
-        command.run(&config, &mut reader)?;
+    for cmd in &config.commands {
+        match cmd {
+            Command::Help => info::help(),
+            Command::List => info::list(&config),
+            Command::Alias => alias::run(&config)?,
+            Command::Show => info::show(&config)?,
+            Command::Clean => clean::run(&config)?,
+            Command::Add => add::run(&config)?,
+            Command::Download => download::run(&config, &mut reader)?,
+            Command::Tag => tag::run(&config, &mut reader)?,
+            Command::Deposit => deposit::run(&config, &mut reader)?,
+            _ => return Err(format!("Cannot run this command: {:?}. See 'help'", cmd).into()),
+        }
     }
     Ok(())
 }
