@@ -43,7 +43,6 @@ fn write(aliases: BTreeMap<String, PathBuf>, path: &PathBuf) -> types::UnitResul
     let content = aliases.iter().fold(String::new(), |acc, (alias, path)| {
         format!("{}{}={}\n", acc, alias, path.to_str().unwrap())
     });
-    println!("To write: {content}");
     util::write(path, content)
 }
 
