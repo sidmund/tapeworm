@@ -3,7 +3,7 @@ use std::fs::{self, DirEntry};
 use std::path::PathBuf;
 
 pub fn run(config: &Config) -> types::UnitResult {
-    remove_empty_folders(config.lib_path.as_ref().unwrap(), 0, config.verbose)
+    remove_empty_folders(config.target_dir.as_ref().unwrap(), 0, config.verbose)
 }
 
 /// Remove empty folders, except for ".tapeworm".

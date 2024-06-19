@@ -174,12 +174,13 @@ impl Config {
 
         // Enforce parameter requirements
         if self.commands[0] == Command::Process {
+            // When lib.conf and CLI did not receive 'steps'
             return Err("Steps not specified. See 'help'".into());
         }
         if self.commands.contains(&Command::Tag) || self.commands.contains(&Command::Deposit) {
             self.require_input_dir()?;
         }
-        if self.commands.contains(&Command::Deposit) {
+        if self.commands.contains(&Command::Deposit) || self.commands.contains(&Command::Clean) {
             self.require_target_dir()?;
         }
         Ok(())
@@ -324,7 +325,7 @@ impl Config {
                             return Err("Organization mode not specified. See 'help'".into());
                         }
                     }
-                    'o' if [Command::Deposit, Command::Process].contains(&self.commands[0]) => {
+                    'o' if [Command::Deposit, Command::Clean, Command::Process].contains(&self.commands[0]) => {
                         self.target_dir = args.next().map(PathBuf::from);
                     }
                     's' if self.commands[0] == Command::Process => self.parse_steps(args.next())?,
@@ -343,6 +344,9 @@ impl Config {
     }
 
     fn parse_steps(&mut self, steps: Option<String>) -> types::UnitResult {
+        if self.commands[0] != Command::Process {
+            return Ok(());
+        }
         if steps.is_none() {
             return Err("Steps not specified. See 'help'".into());
         }

@@ -202,7 +202,7 @@ This organization mode is aimed at photographs, but does of course work with any
 
 ### :chains: Cleaning
 
-The `clean` command removes empty directories inside the library folder. Of course, the `.tapeworm` folder and its constituents are always kept.
+The `clean` command removes empty directories inside the target folder (by default the root library folder). Of course, the `.tapeworm` folder and its constituents are always kept.
 ```bash
 tapeworm LIBRARY clean
 ```
