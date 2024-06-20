@@ -1,6 +1,7 @@
 mod add;
 mod alias;
 mod clean;
+mod command;
 mod deposit;
 mod download;
 mod editor;
@@ -10,77 +11,12 @@ mod tag;
 mod types;
 mod util;
 
+use crate::command::Command::{self, *};
 use crate::deposit::DepositMode;
 use std::collections::BTreeMap;
 use std::io::BufRead;
 use std::path::PathBuf;
 use std::{env, fs};
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Command {
-    Help,
-    List,
-    Alias,
-    Show,
-    Clean,
-    Add,
-    Download,
-    Tag,
-    Deposit,
-    Process,
-}
-
-impl Command {
-    fn from(s: &str) -> Result<Command, Box<dyn std::error::Error>> {
-        match s {
-            "help" | "h" | "-h" | "--help" => Ok(Self::Help),
-            "list" | "ls" | "l" => Ok(Self::List),
-            "alias" => Ok(Self::Alias),
-            "show" => Ok(Self::Show),
-            "clean" => Ok(Self::Clean),
-            "add" => Ok(Self::Add),
-            "download" => Ok(Self::Download),
-            "tag" => Ok(Self::Tag),
-            "deposit" => Ok(Self::Deposit),
-            "process" => Ok(Self::Process),
-            _ => Err(format!("Unrecognized command: {}. See 'help'", s).into()),
-        }
-    }
-
-    fn uses_lib_conf(&self) -> bool {
-        match self {
-            Self::Alias => true,
-            Self::Clean => true,
-            Self::Deposit => true,
-            Self::Download => true,
-            Self::Process => true,
-            Self::Show => true,
-            Self::Tag => true,
-            _ => false,
-        }
-    }
-
-    fn uses_cli(&self) -> bool {
-        match self {
-            Self::Clean => true,
-            Self::Deposit => true,
-            Self::Download => true,
-            Self::Process => true,
-            Self::Tag => true,
-            _ => false,
-        }
-    }
-
-    fn is_valid_processing_step(&self) -> bool {
-        match self {
-            Self::Clean => true,
-            Self::Deposit => true,
-            Self::Download => true,
-            Self::Tag => true,
-            _ => false,
-        }
-    }
-}
 
 #[derive(Debug, Default)]
 pub struct Config {
@@ -128,10 +64,10 @@ impl Config {
         }
 
         if let Ok(cmd) = Command::from(arg.as_ref().unwrap()) {
-            if cmd == Command::List {
+            if cmd == List {
                 self.commands = vec![cmd];
                 self.parse_general_config()?;
-            } else if cmd != Command::Help {
+            } else if cmd != Help {
                 // Invoked as `tapeworm COMMAND [OPTIONS]`
                 self.commands = vec![cmd];
                 self.setup_library(None)?;
@@ -142,7 +78,7 @@ impl Config {
             self.commands = if let Some(arg) = args.next() {
                 vec![Command::from(&arg).unwrap()]
             } else {
-                vec![Command::Show] // The default when only LIBRARY given
+                vec![Show] // The default when only LIBRARY given
             };
         }
 
@@ -159,13 +95,13 @@ impl Config {
         // Parse CLI options (may override defaults/lib.conf)
         if self.commands[0].uses_cli() {
             self.parse_cli_options(args)?;
-        } else if self.commands[0] == Command::Add {
+        } else if self.commands[0] == Add {
             let terms = args.collect::<Vec<String>>();
             if terms.is_empty() {
                 return Err("Provide search term(s) and/or URL(s). See 'help'".into());
             }
             self.terms = Some(terms);
-        } else if self.commands[0] == Command::Alias {
+        } else if self.commands[0] == Alias {
             let terms = args.collect::<Vec<String>>();
             if !terms.is_empty() {
                 self.terms = Some(terms);
@@ -173,14 +109,14 @@ impl Config {
         }
 
         // Enforce parameter requirements
-        if self.commands[0] == Command::Process {
+        if self.commands[0] == Process {
             // When lib.conf and CLI did not receive 'steps'
             return Err("Steps not specified. See 'help'".into());
         }
-        if self.commands.contains(&Command::Tag) || self.commands.contains(&Command::Deposit) {
+        if self.commands.contains(&Tag) || self.commands.contains(&Deposit) {
             self.require_input_dir()?;
         }
-        if self.commands.contains(&Command::Deposit) || self.commands.contains(&Command::Clean) {
+        if self.commands.contains(&Deposit) || self.commands.contains(&Clean) {
             self.require_target_dir()?;
         }
         Ok(())
@@ -304,31 +240,27 @@ impl Config {
             for c in arg[1..].chars() {
                 match c {
                     'v' => self.verbose = true,
-                    'c' if [Command::Download, Command::Process].contains(&self.commands[0]) => {
+                    'c' if [Download, Process].contains(&self.commands[0]) => {
                         self.clear_input = true;
                     }
-                    'a' if [Command::Download, Command::Process].contains(&self.commands[0]) => {
+                    'a' if [Download, Process].contains(&self.commands[0]) => {
                         self.auto_download = true;
                     }
-                    't' if [Command::Tag, Command::Process].contains(&self.commands[0]) => {
-                        self.auto_tag = true
-                    }
-                    'i' if [Command::Tag, Command::Deposit, Command::Process]
-                        .contains(&self.commands[0]) =>
-                    {
+                    't' if [Tag, Process].contains(&self.commands[0]) => self.auto_tag = true,
+                    'i' if [Tag, Deposit, Process].contains(&self.commands[0]) => {
                         self.input_dir = args.next().map(PathBuf::from);
                     }
-                    'd' if [Command::Deposit, Command::Process].contains(&self.commands[0]) => {
+                    'd' if [Deposit, Process].contains(&self.commands[0]) => {
                         if let Some(mode) = args.next() {
                             self.organize = DepositMode::from(mode.as_str())?;
                         } else {
                             return Err("Organization mode not specified. See 'help'".into());
                         }
                     }
-                    'o' if [Command::Deposit, Command::Clean, Command::Process].contains(&self.commands[0]) => {
+                    'o' if [Deposit, Clean, Process].contains(&self.commands[0]) => {
                         self.target_dir = args.next().map(PathBuf::from);
                     }
-                    's' if self.commands[0] == Command::Process => self.parse_steps(args.next())?,
+                    's' if self.commands[0] == Process => self.parse_steps(args.next())?,
                     _ => {
                         return Err(format!(
                             "Unrecognized option '{}' for command '{:?}'. See 'help'",
@@ -344,7 +276,7 @@ impl Config {
     }
 
     fn parse_steps(&mut self, steps: Option<String>) -> types::UnitResult {
-        if self.commands[0] != Command::Process {
+        if self.commands[0] != Process {
             return Ok(());
         }
         if steps.is_none() {
@@ -400,7 +332,7 @@ impl Config {
 
     fn default() -> Self {
         Self {
-            commands: vec![Command::Help],
+            commands: vec![Help],
             general_conf: PathBuf::from(dirs::config_dir().unwrap())
                 .join("tapeworm")
                 .join("tapeworm.conf"),
@@ -423,15 +355,15 @@ impl Config {
 pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
     for cmd in &config.commands {
         match cmd {
-            Command::Help => info::help(),
-            Command::List => info::list(&config),
-            Command::Alias => alias::run(&config)?,
-            Command::Show => info::show(&config)?,
-            Command::Clean => clean::run(&config)?,
-            Command::Add => add::run(&config)?,
-            Command::Download => download::run(&config, &mut reader)?,
-            Command::Tag => tag::run(&config, &mut reader)?,
-            Command::Deposit => deposit::run(&config, &mut reader)?,
+            Help => info::help(),
+            List => info::list(&config),
+            Alias => alias::run(&config)?,
+            Show => info::show(&config)?,
+            Clean => clean::run(&config)?,
+            Add => add::run(&config)?,
+            Download => download::run(&config, &mut reader)?,
+            Tag => tag::run(&config, &mut reader)?,
+            Deposit => deposit::run(&config, &mut reader)?,
             _ => return Err(format!("Cannot run this command: {:?}. See 'help'", cmd).into()),
         }
     }
