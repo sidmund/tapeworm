@@ -1,10 +1,28 @@
 //! Integration testing helper functions.
 
 use rand::distributions::{Alphanumeric, DistString};
+use std::collections::HashSet;
 use std::io::{self, BufRead, Write};
 use std::path::PathBuf;
 use std::{env, fs};
-use tapeworm::Config;
+use tapeworm::{Config, Downloader};
+
+/// Mocks yt-dlp by simply creating a file for each input.
+pub struct MockYtDlp;
+impl Downloader for MockYtDlp {
+    fn download<R: BufRead>(
+        &self,
+        config: &Config,
+        inputs: HashSet<String>,
+        _reader: R,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let dest = config.lib_path.as_ref().unwrap().join(".tapeworm").join("in");
+        for (i, input) in inputs.iter().map(|s| s.to_owned()).enumerate() {
+            write(&dest.join(format!("{i}.txt")), input);
+        }
+        Ok(())
+    }
+}
 
 pub struct Library {
     /// The relative base library directory name
@@ -111,11 +129,11 @@ pub fn build(mut args: Vec<&str>) -> Result<Config, Box<dyn std::error::Error>> 
 
 /// Run the `config` and use `io::stdin` for reading any user input.
 pub fn run(config: Config) -> Result<(), Box<dyn std::error::Error>> {
-    tapeworm::run(config, io::stdin().lock())
+    tapeworm::run(config, io::stdin().lock(), MockYtDlp {})
 }
 
 pub fn run_with<R: BufRead>(config: Config, reader: R) -> Result<(), Box<dyn std::error::Error>> {
-    tapeworm::run(config, reader)
+    tapeworm::run(config, reader, MockYtDlp {})
 }
 
 /// # Returns

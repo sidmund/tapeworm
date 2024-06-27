@@ -135,13 +135,6 @@ fn adds_to_library() {
 fn download(clear_input: bool) {
     let lib = Library::new().create_in_out_folders();
 
-    // Write some yt-dlp options
-    let options = format!(
-        "-i -P \"{}\" -o \"%(title)s.%(ext)s\" -x --audio-format mp3",
-        lib.input_arg()
-    );
-    write(&lib.cfg_dir.join("yt-dlp.conf"), options);
-
     // Add a query
     run(build(vec![lib.arg(), "add", "Darude Sandstorm"]).unwrap()).unwrap();
 
@@ -169,13 +162,11 @@ fn download(clear_input: bool) {
 }
 
 #[test]
-#[ignore]
 fn downloads_and_keeps_input() {
     download(false);
 }
 
 #[test]
-#[ignore]
 fn downloads_and_clears_input() {
     download(true);
 }
