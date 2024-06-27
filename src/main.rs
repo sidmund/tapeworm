@@ -6,7 +6,7 @@ fn main() {
         process::exit(1);
     });
 
-    if let Err(e) = tapeworm::run(config, io::stdin().lock()) {
+    if let Err(e) = tapeworm::run(config, io::stdin().lock(), tapeworm::YtDlp {}) {
         eprintln!("Application error: {}", e);
         process::exit(1);
     }

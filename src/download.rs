@@ -6,39 +6,79 @@ use std::io::{BufRead, BufReader, ErrorKind};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-pub fn run<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {
-    let mut yt_dlp_conf_path = config.yt_dlp_conf_path.as_ref();
-    if fs::metadata(yt_dlp_conf_path.unwrap()).is_err() {
-        println!(
-            "Warning! Could not find: {}
-If you continue, yt-dlp will be invoked without any options, which will yield inconsistent results.",
-            yt_dlp_conf_path.unwrap().to_str().unwrap()
-        );
-        match util::select("Continue anyway?", vec![Yes, No], No, &mut reader) {
-            Ok(Yes) => yt_dlp_conf_path = None,
-            _ => return Ok(()), // User wants to abort when config is not found
-        }
-    }
+/// Interface for downloading files.
+pub trait Downloader {
+    fn download<R: BufRead>(
+        &self,
+        config: &Config,
+        inputs: HashSet<String>,
+        reader: R,
+    ) -> types::UnitResult;
+}
 
-    let input_path = config.input_path.as_ref().unwrap();
-    let inputs = fs::read_to_string(input_path).unwrap_or(String::new());
-    if inputs.is_empty() {
+/// Wrapper for `yt-dlp`.
+pub struct YtDlp;
+
+impl YtDlp {
+    fn get_config<R: BufRead>(config: &Config, mut reader: R) -> Option<&PathBuf> {
+        let mut yt_dlp_conf_path = config.yt_dlp_conf_path.as_ref();
+        if fs::metadata(yt_dlp_conf_path.unwrap()).is_err() {
+            println!(
+                "Warning! Could not find: {}\nIf you continue, yt-dlp will be invoked without any options, which will yield inconsistent results.",
+                yt_dlp_conf_path.unwrap().to_str().unwrap()
+            );
+            match util::select("Continue anyway?", vec![Yes, No], No, &mut reader) {
+                Ok(Yes) => yt_dlp_conf_path = None,
+                _ => std::process::exit(0), // User wants to abort when config is not found
+            }
+        }
+        yt_dlp_conf_path
+    }
+}
+
+impl Downloader for YtDlp {
+    fn download<R: BufRead>(
+        &self,
+        config: &Config,
+        inputs: HashSet<String>,
+        mut reader: R,
+    ) -> types::UnitResult {
+        let mut command = Command::new("yt-dlp");
+        if let Some(conf_path) = YtDlp::get_config(config, &mut reader) {
+            command.arg("--config-location").arg(conf_path);
+        }
+        inputs.iter().for_each(|url| {
+            command.arg(url);
+        });
+        command.stdout(Stdio::piped());
+
+        let stdout = command.spawn()?.stdout.ok_or_else(|| {
+            std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
+        })?;
+        BufReader::new(stdout)
+            .lines()
+            .filter_map(|line| line.ok())
+            .for_each(|line| println!("{}", line));
+        Ok(())
+    }
+}
+
+pub fn run<R, D>(config: &Config, mut reader: R, downloader: &D) -> types::UnitResult
+where
+    R: BufRead,
+    D: Downloader,
+{
+    if let Some(inputs) = get_inputs(config) {
+        downloader.download(config, inputs, &mut reader)?;
+    } else {
         if config.verbose {
             println!("Nothing to download. Library is empty.");
         }
         return Ok(());
     }
 
-    let inputs: HashSet<String> = inputs.lines().map(|s| s.to_string()).collect();
-    if config.verbose {
-        println!("Downloading {} URLs:", inputs.len());
-        inputs.iter().for_each(|s| println!("  {}", s));
-        println!();
-    }
-    yt_dlp(yt_dlp_conf_path, inputs)?;
-
     if config.clear_input {
-        fs::write(input_path, "")?;
+        fs::write(config.input_path.as_ref().unwrap(), "")?;
     }
 
     if config.auto_download {
@@ -48,27 +88,20 @@ If you continue, yt-dlp will be invoked without any options, which will yield in
     }
 }
 
-/// Download URLs with yt-dlp
-fn yt_dlp(conf_path: Option<&PathBuf>, urls: HashSet<String>) -> types::UnitResult {
-    let mut command = Command::new("yt-dlp");
-    if let Some(conf_path) = conf_path {
-        command.arg("--config-location").arg(conf_path);
+fn get_inputs(config: &Config) -> Option<HashSet<String>> {
+    let input_path = config.input_path.as_ref().unwrap();
+    let inputs = fs::read_to_string(input_path).unwrap_or(String::new());
+    if inputs.is_empty() {
+        return None;
     }
-    urls.iter().for_each(|url| {
-        command.arg(url);
-    });
-    command.stdout(Stdio::piped());
 
-    let stdout = command.spawn()?.stdout.ok_or_else(|| {
-        std::io::Error::new(ErrorKind::Other, "Could not capture standard output.")
-    })?;
-
-    BufReader::new(stdout)
-        .lines()
-        .filter_map(|line| line.ok())
-        .for_each(|line| println!("{}", line));
-
-    Ok(())
+    let inputs: HashSet<String> = inputs.lines().map(|s| s.to_string()).collect();
+    if config.verbose {
+        println!("Downloading {} URLs:", inputs.len());
+        inputs.iter().for_each(|s| println!("  {}", s));
+        println!();
+    }
+    Some(inputs)
 }
 
 fn confirm_downloads<R: BufRead>(config: &Config, mut reader: R) -> types::UnitResult {

@@ -1,3 +1,5 @@
+pub use crate::download::{Downloader, YtDlp};
+
 mod add;
 mod alias;
 mod clean;
@@ -352,7 +354,11 @@ impl Config {
     }
 }
 
-pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
+pub fn run<R, D>(config: Config, mut reader: R, downloader: D) -> types::UnitResult
+where
+    R: BufRead,
+    D: download::Downloader,
+{
     for cmd in &config.commands {
         match cmd {
             Help => info::help(),
@@ -361,7 +367,7 @@ pub fn run<R: BufRead>(config: Config, mut reader: R) -> types::UnitResult {
             Show => info::show(&config)?,
             Clean => clean::run(&config)?,
             Add => add::run(&config)?,
-            Download => download::run(&config, &mut reader)?,
+            Download => download::run(&config, &mut reader, &downloader)?,
             Tag => tag::run(&config, &mut reader)?,
             Deposit => deposit::run(&config, &mut reader)?,
             _ => return Err(format!("Cannot run this command: {:?}. See 'help'", cmd).into()),
