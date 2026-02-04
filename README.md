@@ -13,7 +13,7 @@ tapeworm is a media file processing utility written in Rust.
 
 ## :hammer: Build
 
-A Rust installation is required. tapeworm compiles with Rust 1.74.0+ (stable).
+A Rust installation is required. tapeworm compiles with Rust 1.93.0+ (stable).
 
 To build tapeworm:
 ```bash
