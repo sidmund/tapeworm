@@ -34,12 +34,11 @@ pub fn show(config: &Config) -> types::UnitResult {
     let input_path = config.input_path.as_ref().unwrap();
     if fs::metadata(input_path).is_ok() {
         print!("  > input.txt : ");
-        let inputs = fs::read_to_string(input_path)?;
-        if inputs.is_empty() {
-            println!("Nothing to download");
-        } else {
-            println!("{} to download", inputs.lines().count());
-        }
+        let count = fs::read_to_string(input_path)?
+            .lines()
+            .filter(|line: &&str| !line.trim().is_empty())
+            .count();
+        println!("{} to download", count);
     }
     if fs::metadata(config.lib_conf_path.as_ref().unwrap()).is_ok() {
         println!("  > lib.conf");
